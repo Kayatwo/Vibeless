@@ -40,3 +40,13 @@ helper and matchmaking controller. Existing production files are patched directl
 preserving unrelated live code. Only metagame is restarted through the existing
 supervisor; hunt processes are not restarted. No database migration is introduced.
 Local staging and before/after manifest: `C:/dr/nova-defense-live-20261017`.
+
+Applied and verified: all four live file hashes match the staged manifest;
+metagame restarted as PID 11476, HTTP health returned 200, chat listened, and an
+unauthenticated inventory POST returned 401. Existing hunt processes remained
+running. Health latency was about 6.4 seconds during one loaded sample, so this
+does not establish that overall capacity or latency is resolved.
+
+Separate remaining issue: sampled deploy 500 errors were Training Grounds routed
+to the NA hunt worker, which rejects that world when its dojo support is disabled.
+Those were not misclassified patrol-capacity errors; no worker policy was changed.
