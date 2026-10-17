@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { linkInput } from './link-input.mjs';
 
 export async function loadState(file) {
@@ -17,10 +18,18 @@ export async function loadState(file) {
   }
 }
 
-export async function saveState(file, state) {
+export async function saveState(file, state, {platform = process.platform, replace = rename, sleep = delay} = {}) {
   await mkdir(dirname(file), {recursive: true});
   await writeFile(`${file}.tmp`, JSON.stringify(state), {mode: 0o600});
-  await rename(`${file}.tmp`, file);
+  // Antivirus/indexers can briefly deny Windows replacement. Keep the original
+  // file intact and retry the same atomic rename, never unlink/copy over it.
+  for (let attempt = 0; ; ++attempt) {
+    try { await replace(`${file}.tmp`, file); return; }
+    catch (error) {
+      if (platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 6) throw error;
+      await sleep(50 * 2 ** attempt);
+    }
+  }
 }
 
 export function backend(base, key, request = fetch) {

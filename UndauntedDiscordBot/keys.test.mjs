@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Keys, backend } from './keys.mjs';
+import { Keys, backend, saveState } from './keys.mjs';
 import { launcherInvite, inviteMessage } from './invite.mjs';
 const config={Mode:'Public',PublicHost:'game.example.com',Ports:{gateway:443},CertFingerprint:'a'.repeat(64),ServerName:'Test & Hunt'};
 test('claims produce complete launcher invites and valid registration code characters',async()=>{
@@ -180,4 +180,33 @@ test('blocked history lookup keeps the reserved invite and explains DM settings'
   assert.equal(result.status,'dm_disabled');
   assert.equal(f.state.users[user].delivery,'reserved');
   assert.equal(f.count(),1);
+});
+
+
+test('Windows transient state replacement retries atomically and preserves old state until success',async()=>{
+  const fs=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+  const dir=await fs.mkdtemp(join(tmpdir(),'dr-key-state-'));const file=join(dir,'keys.json');
+  try {
+    await fs.writeFile(file,'old');let calls=0;const waits=[];
+    await saveState(file,{version:1,users:{}},{platform:'win32',sleep:async ms=>waits.push(ms),replace:async(a,b)=>{
+      assert.equal(await fs.readFile(file,'utf8'),'old');
+      if(++calls<=3)throw Object.assign(Error('locked'),{code:['EPERM','EACCES','EBUSY'][calls-1]});
+      await fs.rename(a,b);
+    }});
+    assert.equal(calls,4);assert.deepEqual(waits,[50,100,200]);
+    assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),{version:1,users:{}});
+    for(const [platform,code,expected] of [['win32','EPERM',7],['win32','ENOSPC',1],['linux','EPERM',1]]){
+      calls=0;const failure=Object.assign(Error('failed'),{code});
+      await assert.rejects(saveState(file,{version:1,users:{pending:{}}},{platform,sleep:async()=>{},replace:async()=>{++calls;throw failure;}}),error=>error===failure);
+      assert.equal(calls,expected);assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),{version:1,users:{}});
+    }
+  } finally {await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('backend-issued invite survives final commit failure and restart without a second issuance',async()=>{
+  const f=setup();let durable;let saves=0;
+  f.service.save=async value=>{if(++saves===2)throw Error('rename failed');durable=JSON.stringify(value);};
+  await assert.rejects(f.service.run(user,true));assert.equal(f.count(),1);
+  const restarted=new Keys(JSON.parse(durable),async()=>{},f.api,()=>assert.fail('must reuse pending invite'));
+  assert.deepEqual(await restarted.run(user,true),{status:'ready',code:'DR-test'});assert.equal(f.count(),1);
 });
