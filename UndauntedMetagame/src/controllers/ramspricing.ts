@@ -27,7 +27,7 @@ export function PriceInRams(offer: StoreOffer, accountId: string): StoreOffer {
     if (!RamsEnabled(accountId) || !offer.tags.includes('webstore')) return offer;
     if(offer.entitlements?.length){
         if(!offer.tags.some(t=>t==='dye_armour'||t==='dye_tint') || offer.items?.length) return offer;
-        const result={...offer,notesPrice:10000,displayDescription:'Purchase for 10,000 Rams.'};
+        const result={...offer,notesPrice:5000,displayDescription:'Purchase for 5,000 Rams.'};
         delete result.platinumPrice;
         return result;
     }
@@ -35,16 +35,16 @@ export function PriceInRams(offer: StoreOffer, accountId: string): StoreOffer {
     const prices = offer.items.map(item => {
         if (item.quantity !== 1) return undefined;
         const id = item.catalogId;
-        if (id.startsWith('DYE_')) return 10000;
-        if (id.startsWith('WP_')) return 5000;
-        if (['BNC_SIGIL_', 'QI_FLARE_'].some(prefix => id.startsWith(prefix))) return 500;
-        if (['AR_', 'EM_', 'BNC_FABRIC_', 'BNC_STANDARD_', 'LT_'].some(prefix => id.startsWith(prefix))) return 1500;
+        if (id.startsWith('DYE_')) return 5000;
+        if (id.startsWith('WP_')) return 2500;
+        if (['BNC_SIGIL_', 'QI_FLARE_'].some(prefix => id.startsWith(prefix))) return 250;
+        if (['AR_', 'EM_', 'BNC_FABRIC_', 'BNC_STANDARD_', 'LT_'].some(prefix => id.startsWith(prefix))) return 750;
         return undefined;
     });
     // Unsupported offers remain unchanged rather than inventing prices for currencies or consumables.
     if (prices.some(price => price === undefined)) return offer;
     const fullKit = offer.items.filter(item => item.catalogId.startsWith('AR_')).length >= 4;
-    const price = fullKit ? 10000 : Math.min(10000, (prices as number[]).reduce((sum, value) => sum + value, 0));
+    const price = fullKit ? 5000 : Math.min(5000, (prices as number[]).reduce((sum, value) => sum + value, 0));
     const result = {...offer, notesPrice: price, displayDescription: `Purchase for ${price.toLocaleString('en-US')} Rams.`};
     delete result.platinumPrice;
     return result;
