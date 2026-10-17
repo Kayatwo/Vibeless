@@ -22,7 +22,7 @@ const Server = app.listen(PORT, BIND_HOST, (err?: Error) => {
   // A failed start is reported, not an unhandled rejection (from github.com/Harmonicrain/Undaunted 895f7c7)
   Startup = StartupAndReportFailure();
 
-  Watchdog = setInterval(RunWatchdog, 60 * 1000);
+  Watchdog = setInterval(() => { void RunWatchdog().catch(error => logger.error({error}, "Gameserver watchdog failed")); }, 15 * 1000);
 
   logger.info(`Dauntless Revived deploy server on port ${PORT}`);
   logger.info(`Ramsgate and Dojo liveness check before handing them out: ${IsPersistentWorldLivenessOn() ? "on" : "off (PERSISTENT_WORLD_LIVENESS=0)"}`);

@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {HuntLifetime,HuntLifetimeFromEnv} from '../src/controllers/huntlifetime';
-const hunt={id:'h',isRamsgate:false,isTrainingDojo:false,startTime:new Date(0)};
-test('hard limit stops hunts even with unknown occupancy, never persistent worlds',()=>{
+const hunt={id:'h',isRamsgate:false,isTrainingDojo:false,startTime:new Date(0),readyAt:0};
+test('age never terminates occupied or unknown hunts, nor persistent worlds',()=>{
  const policy=new HuntLifetime(120000,10000,0);
  assert.equal(policy.reason(hunt,4,119999),undefined);
- assert.equal(policy.reason(hunt,undefined,120000),'maximum_age');
+ assert.equal(policy.reason(hunt,undefined,120000),undefined);
+ assert.equal(policy.reason(hunt,4,999999),undefined);
  assert.equal(policy.reason({...hunt,isRamsgate:true},0,999999),undefined);
  assert.equal(policy.reason({...hunt,isTrainingDojo:true},0,999999),undefined);
 });
@@ -25,9 +26,18 @@ test('invalid lifetime configuration fails instead of silently disabling cleanup
  assert.throws(()=>HuntLifetimeFromEnv({HUNT_MAX_AGE_MINUTES:'0'}));
  assert.throws(()=>HuntLifetimeFromEnv({HUNT_EMPTY_MINUTES:'NaN'}));
 });
-test('default empty cleanup gives slow clients five minutes to arrive',()=>{
+test('default cleanup needs two minutes of fresh zero counts after readiness',()=>{
+ const policy=HuntLifetimeFromEnv({});
+ assert.equal(policy.reason({...hunt,readyAt:undefined},0,0),undefined);
+ assert.equal(policy.reason({...hunt,readyAt:undefined},0,120000),undefined);
+ assert.equal(policy.reason(hunt,0,120000),undefined);
+ assert.equal(policy.reason(hunt,0,180000),undefined);
+ assert.equal(policy.reason(hunt,0,240000),'empty');
+});
+test('missed observations reset the empty interval instead of treating a gap as empty',()=>{
  const policy=HuntLifetimeFromEnv({});
  assert.equal(policy.reason(hunt,0,0),undefined);
+ assert.equal(policy.reason(hunt,0,120000),undefined);
  assert.equal(policy.reason(hunt,0,180000),undefined);
- assert.equal(policy.reason(hunt,0,300000),'empty');
+ assert.equal(policy.reason(hunt,0,240000),'empty');
 });

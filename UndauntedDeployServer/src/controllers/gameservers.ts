@@ -34,6 +34,7 @@ export type Gameserver = {
     isRamsgate: boolean,
     isTrainingDojo: boolean,
     processId: number,
+    readyAt?: number,
     startTime: Date
 };
 
@@ -386,6 +387,7 @@ async function StartServerNow(Map: string, Behemoth: string | undefined, Matchma
         const TimeoutMs = GameserverStartupTimeoutMs();
         if (TimeoutMs > 0) {
             await WaitForServerReady(Child, Port, ReadyFile, TimeoutMs);
+            NewGameserver.readyAt = Date.now();
             ReleaseReservation();
         }
     } catch (error) {
