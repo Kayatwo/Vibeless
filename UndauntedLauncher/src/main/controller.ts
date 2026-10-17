@@ -64,6 +64,7 @@ import { installClientMods } from "./client-mods";
 import { applyGameConfig } from "./engineini";
 import { locateExistingGame } from "./game-folder";
 import { buildLaunchArgs, describeLaunch, GameProcess, gameLocale, type LaunchRuntime, type SpawnFn } from "./launch";
+import { createRelayOwnerCheck } from "./relay-owner";
 import { backupFileText, KeyStore, KeyStoreError, serverId, type Encryptor, type KeySlot } from "./keystore";
 import { SettingsStore, type StoredServer, type StoredSettings } from "./settings";
 import { freeBytes, missingVcRuntime } from "./system";
@@ -1608,9 +1609,16 @@ export class Controller {
     await this.stopRelay();
     if (sv.mode !== "public" || sv.fp === null) return err("relay_failed");
     const port = this.p.relayPort ?? DEFAULT_RELAY_PORT;
+    // Windows launches the game directly. Wine/Proton's wrapper PID is not its socket owner.
+    const ownerCheck = this.hostPlatform === "win32" ? createRelayOwnerCheck() : undefined;
     const relay = new Relay({
       target: { host: sv.host, port: sv.port, fingerprint: sv.fp },
       port,
+      authorizeConnection: ownerCheck ? async (socket) => {
+        const pid = this.game.pid;
+        if (!pid) return false;
+        return await ownerCheck(socket, pid) && this.game.pid === pid;
+      } : undefined,
       onPinError: () => {
         this.lastError = { code: "cert_mismatch" };
         this.publish();

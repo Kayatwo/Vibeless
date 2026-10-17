@@ -231,21 +231,24 @@ test("GameProcess: tracks start and exit, and refuses to start twice", async () 
   let child: EventEmitter | null = null;
   const fakeSpawn = ((exe: string, args: string[], opts: { cwd: string }) => {
     calls.push({ exe, args, cwd: opts.cwd });
-    child = new EventEmitter();
+    child = Object.assign(new EventEmitter(), { pid: 4321 });
     setImmediate(() => child!.emit("spawn"));
     return child;
   }) as unknown as SpawnFn;
   const gp = new GameProcess(fakeSpawn);
+  assert.equal(gp.pid, undefined);
   const events: boolean[] = [];
   gp.onChange((running) => events.push(running));
   await gp.start("C:\\game\\Archon\\Binaries\\Win64", ["a"]);
   assert.equal(gp.running, true);
+  assert.equal(gp.pid, 4321);
   await assert.rejects(gp.start("C:\\game\\Archon\\Binaries\\Win64", ["a"]));
   assert.equal(calls.length, 1);
   assert.ok(calls[0].exe.endsWith("Dauntless-Win64-Shipping.exe"));
   assert.equal(calls[0].cwd, "C:\\game\\Archon\\Binaries\\Win64");
   (child as unknown as EventEmitter).emit("exit", 0);
   assert.equal(gp.running, false);
+  assert.equal(gp.pid, undefined);
   assert.deepEqual(events, [true, false]);
 });
 

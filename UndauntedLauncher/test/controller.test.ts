@@ -110,7 +110,8 @@ function harness(relayPort = RELAY_PORT, userDataDir?: string, chooseFolder: Pla
   let child: EventEmitter | null = null;
   const fakeSpawn = ((exe: string, args: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }) => {
     spawns.push({ exe, args, cwd: opts.cwd, env: opts.env });
-    child = new EventEmitter();
+    // Requests below simulate the game from this test process.
+    child = Object.assign(new EventEmitter(), { pid: process.pid });
     const c = child;
     onChild?.(c);
     setImmediate(() => c.emit("spawn"));

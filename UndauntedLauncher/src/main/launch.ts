@@ -82,6 +82,10 @@ export class GameProcess {
     return this.child !== null;
   }
 
+  get pid(): number | undefined {
+    return this.child?.pid;
+  }
+
   onChange(fn: (running: boolean, code: number | null) => void): void {
     this.listeners.push(fn);
   }
