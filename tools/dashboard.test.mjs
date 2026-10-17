@@ -230,3 +230,26 @@ test('account recovery requires owner authentication and is never cached',async(
    assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.json()).key,'fixture-login-key');assert.equal(recovered,1);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+test('slow moderation completes once and account totals are cached across polls', async () => {
+  const {setTimeout: delay} = await import('node:timers/promises');
+  const key='test-owner-key-not-a-real-secret';
+  let users=0, writes=0;
+  const server=await startDashboard({key,port:0,backend:'http://127.0.0.1:61000',fetcher:async (url,options)=>{
+    if(options.method==='POST'){
+      writes++;
+      await delay(10500,undefined,{signal:options.signal});
+      return {status:200,json:async()=>({active:false})};
+    }
+    if(url.pathname.endsWith('GetAllUsers')) users++;
+    return {ok:true,json:async()=>url.pathname.endsWith('GetAllUsers')?{Users:[]}:{players:[],instances:[],playersOnline:0}};
+  }});
+  try {
+    const base='http://127.0.0.1:'+server.address().port;
+    const response=await fetch(base+'/api/moderation',{method:'POST',headers:{'x-dashboard-key':key,'content-type':'application/json',origin:base},body:JSON.stringify({accountId:'UID-fixture',active:false,reason:'test'})});
+    assert.equal(response.status,200);
+    assert.equal((await response.json()).active,false);
+    assert.equal(writes,1);
+    assert.equal(users,1);
+  } finally {await new Promise(resolve=>server.close(resolve));}
+});

@@ -57,7 +57,7 @@
   const charts = ['cpu', 'ramUsedMB', 'players', 'backendMs', 'requestsPerSecond', 'errorPercent', 'eventLoopP95Ms', 'backendRssMB', 'backendHeapMB'];
   function table(id, rows) { el(id).replaceChildren(...rows.map(cells => { const tr = document.createElement('tr'); for (const text of cells) { const td = document.createElement('td'); td.textContent = text; tr.append(td); } return tr; })); }
   async function get(path) {
-    const response = await fetch(path, {headers: {'x-dashboard-key': key}, signal: AbortSignal.timeout(5000)});
+    const response = await fetch(path, {headers: {'x-dashboard-key': key}, signal: AbortSignal.timeout(35000)});
     if (!response.ok) throw new Error(response.status === 401 ? 'Owner key rejected.' : 'Dashboard request failed.');
     return response.json();
   }
@@ -260,7 +260,7 @@
     if(!accountId || !reason){el('moderationStatus').textContent='Account ID and reason are required.';return;}
     el('banAccount').disabled=el('unbanAccount').disabled=true;
     try {
-      const response=await fetch('/api/moderation',{method:'POST',headers:{'x-dashboard-key':key,'content-type':'application/json'},body:JSON.stringify({accountId,reason,active,includeDevice:active && el('banDevice').checked,includeIp:active && el('banIp').checked,...(active?{durationHours:Number(el('banDuration').value)}:{})}),signal:AbortSignal.timeout(15000)});
+      const response=await fetch('/api/moderation',{method:'POST',headers:{'x-dashboard-key':key,'content-type':'application/json'},body:JSON.stringify({accountId,reason,active,includeDevice:active && el('banDevice').checked,includeIp:active && el('banIp').checked,...(active?{durationHours:Number(el('banDuration').value)}:{})}),signal:AbortSignal.timeout(65000)});
       const result=await response.json();if(!response.ok)throw Error(result.error || 'Moderation failed');
       el('moderationInfo').textContent=JSON.stringify(result,null,2);el('moderationStatus').textContent=active?'Player banned. Reason will appear in the launcher.':'Player unbanned.';
       void loadModerationLog('bans');void loadModerationLog('events');
