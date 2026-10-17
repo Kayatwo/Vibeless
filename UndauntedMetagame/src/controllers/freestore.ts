@@ -19,6 +19,7 @@ import { Tx } from "./savehistory";
 import { FinalizeCompletedTrialWeeks } from "./trials";
 import { PriceInRams } from "./ramspricing";
 import { ShopLayout } from "./shoplayout";
+import { WeeklyStoreWindow } from "./storeclock";
 
 // The free store (roadmap 3.7, STORE=free). The client's flow (0x140b39657, 0x140b55011):
 // - GET /product/skus/public?requiredTags=<tag>: the offers of one tag (the storefront is "webstore"),
@@ -74,8 +75,6 @@ type MiddlemanCellsCatalog = { families: {id: string, name: string}[] };
 const LadyLuck = ladyLuck as unknown as LadyLuckCatalog;
 const MiddlemanCatalogData = middlemanStore as unknown as MiddlemanCatalog;
 const MiddlemanCells = middlemanCells as unknown as MiddlemanCellsCatalog;
-const MIDDLEMAN_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const MIDDLEMAN_ROTATION_EPOCH = Date.UTC(1970, 0, 1, 18); // Thursday 18:00 UTC, the retail weekly reset.
 const MIDDLEMAN_WEEKLY_TAG = "weekly_cell_offering";
 
 const MiddlemanCellOffers: StoreOffer[] = MiddlemanCells.families.flatMap((Family) =>
@@ -111,7 +110,7 @@ const MIDDLEMAN_VENDOR_IDS = new Set([
 ].map((Offer) => Offer.id));
 
 export function MiddlemanWindowStart(At: Date = new Date()){
-    return MIDDLEMAN_ROTATION_EPOCH + Math.floor((At.getTime() - MIDDLEMAN_ROTATION_EPOCH) / MIDDLEMAN_WEEK_MS) * MIDDLEMAN_WEEK_MS;
+    return WeeklyStoreWindow(At).start;
 }
 
 export function SelectWeeklyMiddlemanOffers(At: Date = new Date()): StoreOffer[]{
@@ -121,8 +120,7 @@ export function SelectWeeklyMiddlemanOffers(At: Date = new Date()): StoreOffer[]
     })).sort((A, B) => A.score.localeCompare(B.score));
     if(Families.length === 0) return [];
 
-    const Start = MiddlemanWindowStart(At);
-    const Week = Math.floor((Start - MIDDLEMAN_ROTATION_EPOCH) / MIDDLEMAN_WEEK_MS);
+    const {start: Start, end: End, index: Week} = WeeklyStoreWindow(At);
     const Offset = ((Week * 3) % Families.length + Families.length) % Families.length;
 
     return Array.from({length: Math.min(3, Families.length)}, (_, Index) => {
@@ -134,7 +132,7 @@ export function SelectWeeklyMiddlemanOffers(At: Date = new Date()): StoreOffer[]
             ...Offer,
             displayPriority: Index,
             availableFrom: new Date(Start).toISOString(),
-            availableTo: new Date(Start + MIDDLEMAN_WEEK_MS).toISOString()
+            availableTo: new Date(End).toISOString()
         };
     });
 }

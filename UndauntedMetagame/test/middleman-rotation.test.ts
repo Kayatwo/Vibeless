@@ -7,6 +7,10 @@ import { GetDb } from "../src/db";
 import { inventory } from "../src/db/schema";
 import { CreateStorePurchase, GrantKind, ListStoreOffers, MiddlemanWindowStart, RedeemStorePurchase, SelectWeeklyMiddlemanOffers } from "../src/controllers/freestore";
 import { MakePlayer, StackQuantity } from "./helpers";
+import {ShopLayout} from '../src/controllers/shoplayout';
+import {WeeklyStoreWindow} from '../src/controllers/storeclock';
+import {WithEnv} from './appenv';
+import StoreCatalog from '../src/vendor/store_catalog.json';
 
 after(() => {
     RemoveTestDb(() => GetDb().$client.close());
@@ -30,6 +34,19 @@ function Credit(CharacterId: string, Quantity: number){
 }
 
 describe("Middleman weekly Aetherdust offers", () => {
+    it('shares exact availability boundaries with all rotating shop categories', () => WithEnv({STORE_RAMS:'1',STORE_WEEKLY_ROTATION:'1'}, () => {
+        const boundary=WeeklyStoreWindow(new Date('2026-10-17T12:00:00Z')).end;
+        for(const timestamp of [boundary-1,boundary,boundary+1]){
+            const at=new Date(timestamp), window=WeeklyStoreWindow(at);
+            const shop=ShopLayout(StoreCatalog.webstore,'test',at);
+            const cells=SelectWeeklyMiddlemanOffers(at);
+            assert.ok(shop.length>0 && cells.length>0);
+            for(const offer of [...shop,...cells]){
+                assert.equal(offer.availableFrom,new Date(window.start).toISOString());
+                assert.equal(offer.availableTo,new Date(window.end).toISOString());
+            }
+        }
+    }));
     it("rotates three stable families at the Thursday 18:00 UTC reset", () => {
         const Before = new Date("2026-10-01T17:59:59.000Z");
         const After = new Date("2026-10-01T18:00:00.000Z");

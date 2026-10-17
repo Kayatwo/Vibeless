@@ -1,12 +1,13 @@
 import {createHash} from 'node:crypto';
 import type {StoreOffer} from './freestore';
 import {RamsEnabled} from './ramspricing';
+import {WeeklyStoreWindow} from './storeclock';
 
 // A seed refreshes current stock without changing the weekly schedule.
 export function ShopLayout(offers: StoreOffer[], accountId: string, now = new Date()): StoreOffer[] {
     if(!RamsEnabled(accountId) || process.env.STORE_WEEKLY_ROTATION !== '1') return offers;
-    // Monday 00:00 UTC; the same selection survives restarts and is shared by hosts.
-    const week=Math.floor((now.getTime()-Date.UTC(1970,0,5))/(7*86400000));
+    const window=WeeklyStoreWindow(now);
+    const week=window.index;
     const seed=process.env.STORE_ROTATION_SEED ?? '';
     const ranked=offers.map(o=>({id:o.id,rank:createHash('sha256').update(`${seed}:${o.id}`).digest('hex')}))
         .sort((a,b)=>a.rank.localeCompare(b.rank)||a.id.localeCompare(b.id));
@@ -34,5 +35,9 @@ export function ShopLayout(offers: StoreOffer[], accountId: string, now = new Da
         for(let i=0;i<count;i++) selected.push(group[(start+i)%group.length]);
     }
     const featured=new Set(selected.slice(0,8).map(o=>o.id));
-    return selected.map(o=>featured.has(o.id)?{...o,tags:[...o.tags,'feature']}:o);
+    return selected.map(o=>({...o,
+        tags:featured.has(o.id)?[...o.tags,'feature']:o.tags,
+        availableFrom:new Date(window.start).toISOString(),
+        availableTo:new Date(window.end).toISOString()
+    }));
 }

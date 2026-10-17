@@ -8,7 +8,7 @@ import type {StoreOffer} from '../src/controllers/freestore';
 test('every sufficiently stocked category changes all three offers each week',()=>WithEnv({STORE_RAMS:'1',STORE_WEEKLY_ROTATION:'1',STORE_ROTATION_SEED:'weekly'},()=>{
     const offers=catalog.webstore as StoreOffer[];
     const a=ShopLayout(offers,'player',new Date('2026-10-17T00:00:00Z'));
-    const b=ShopLayout(offers,'player',new Date('2026-10-19T00:00:00Z'));
+    const b=ShopLayout(offers,'player',new Date('2026-10-23T12:00:00Z'));
     const category=(o:StoreOffer)=>o.tags.find(t=>/^(skin_|social_|dye_|personality_|supplies_)/.test(t)) ?? 'other';
     for(const c of new Set(a.map(category))){
         if(offers.filter(o=>category(o)===c).length<6)continue;
@@ -26,7 +26,7 @@ test('manual seed refresh changes stock and retains automatic weekly rotation',(
         assert.notDeepEqual(fresh,previous);
         assert.deepEqual(fresh,ShopLayout(offers,'another-player',now));
         assert.deepEqual(fresh,ShopLayout(offers,'player',new Date('2026-10-18T23:59:59Z')));
-        assert.notDeepEqual(fresh,ShopLayout(offers,'player',new Date('2026-10-19T00:00:00Z')));
+        assert.notDeepEqual(fresh,ShopLayout(offers,'player',new Date('2026-10-23T12:00:00Z')));
         assert.ok(fresh.every(o=>offers.some(original=>original.id===o.id)));
     });
 }));
@@ -38,7 +38,7 @@ test('weekly stock is stable, rotates, preserves prices and corrects category ta
     const featured=(xs:StoreOffer[])=>xs.filter(o=>o.tags.includes('feature')).map(o=>o.id);
     assert.equal(featured(first).length,8);
     assert.deepEqual(first,ShopLayout(offers,'pilot',new Date('2026-10-17T23:59:59Z')));
-    assert.notDeepEqual(featured(first),featured(ShopLayout(offers,'pilot',new Date('2026-10-19T00:00:00Z'))));
+    assert.notDeepEqual(featured(first),featured(ShopLayout(offers,'pilot',new Date('2026-10-23T12:00:00Z'))));
     assert.ok(first.length < offers.length);
     for(const o of first) assert.equal(o.platinumPrice,offers.find(x=>x.id===o.id)!.platinumPrice);
     assert.equal(ShopLayout(offers,'other',day),offers);
