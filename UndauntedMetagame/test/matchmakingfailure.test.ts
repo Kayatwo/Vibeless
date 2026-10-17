@@ -230,7 +230,7 @@ describe("matchmaking when the deploy server starts no game server", () => {
         try {
             for (const path of PATHS) {
                 Calls.length = 0;
-                CurrentMode = {Name: 'memory full', Reply: Json(503, JSON.stringify({error: 'capacity_unavailable', reason: 'memory'}))};
+                CurrentMode = {Name: 'memory full', Reply: res => {res.setHeader('Retry-After','10'); Json(503, JSON.stringify({error: 'capacity_unavailable', reason: 'memory'}))(res);}};
                 const players = await JoinAll(path);
                 await WaitForCalls(1);
                 for (const player of players) assert.equal((await Call('GET', '/candidate/status', player.Token)).json.status, 'MATCHING');
@@ -240,7 +240,10 @@ describe("matchmaking when the deploy server starts no game server", () => {
                     CancelMatchmaking('UID-fifth-capacity');
                 }
                 CurrentMode = WORKING;
-                now += 10001;
+                now += 9999;
+                await Promise.all(players.flatMap(player => Array.from({length:4}, () => Call("GET", "/candidate/status", player.Token))));
+                assert.equal(Calls.length, 1, "concurrent polls must honor Retry-After");
+                now += 2;
                 for (const player of players) assert.equal((await WaitForStatus(player.Token, 'IN_PROGRESS')).json.status, 'IN_PROGRESS');
                 assert.equal(Calls.length, 2);
             }

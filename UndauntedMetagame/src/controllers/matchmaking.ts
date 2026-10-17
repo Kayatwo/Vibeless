@@ -72,6 +72,7 @@ export type MatchmakingResult = {
 
 type LaunchResult = {
     capacity?: boolean,
+    retryAfterMs?: number,
     succeeded: boolean,
     readyNow: boolean,
     host: string,
@@ -232,9 +233,9 @@ function PruneWaitingQueue(queue: MatchmakingQueueData) {
 }
 
 
-type CapacityWait = { next: number, deadline: number, busy: boolean, retry: () => Promise<boolean> };
+type CapacityWait = { next: number, deadline: number, busy: boolean, retry: () => Promise<boolean>, retryMs: () => number };
 const CapacityWaits = new Map<string, CapacityWait>();
-function ParkCapacity(CandidateId: string, retry: () => Promise<boolean>) {
+function ParkCapacity(CandidateId: string, retry: () => Promise<boolean>, retryMs: () => number = () => CAPACITY_RETRY_MS) {
     // No background launches: only an active candidate's status poll can retry.
     for (const [id, wait] of CapacityWaits) {
         const entries = [...MatchmakingResultMap.entries()].filter(([, entry]) => entry.CandidateId === id && !entry.Failed && !entry.Ready);
@@ -242,7 +243,7 @@ function ParkCapacity(CandidateId: string, retry: () => Promise<boolean>) {
         if (wait.deadline < PartyNow() || entries.length === 0) CapacityWaits.delete(id);
     }
     if (CapacityWaits.size >= 1000) return false;
-    CapacityWaits.set(CandidateId, {next: PartyNow() + CAPACITY_RETRY_MS, deadline: PartyNow() + CAPACITY_WAIT_MS, busy: false, retry});
+    CapacityWaits.set(CandidateId, {next: PartyNow() + retryMs(), deadline: PartyNow() + CAPACITY_WAIT_MS, busy: false, retry, retryMs});
     return true;
 }
 
@@ -286,7 +287,7 @@ async function LaunchGameOnDeployserverNow(GameMode: string, GameArgs: string, H
     const URL = "http://" + DEPLOYSERVER_URL + DEPLOYSERVER_MATCHMAKING_PATH;
     const Failed: LaunchResult = { succeeded: false, readyNow: false, host: "", port: 0 };
 
-    let MatchmakingResult: {status: number, body: any};
+    let MatchmakingResult: {status: number, body: any, retryAfter?: string | null};
 
     try{
         MatchmakingResult = await WithDeadline(async signal => {
@@ -303,7 +304,7 @@ async function LaunchGameOnDeployserverNow(GameMode: string, GameArgs: string, H
                     ...(['ISLAND','CITY','SHARED'].includes(GameMode) && Region !== 'main' ? {Region} : {})
                 })
             });
-            if (reply.status === 200 || reply.status === 503) return {status: reply.status, body: await reply.json()};
+            if (reply.status === 200 || reply.status === 503) return {status: reply.status, body: await reply.json(), retryAfter: reply.headers.get("retry-after")};
             void reply.body?.cancel().catch(() => {});
             return {status: reply.status, body: undefined};
         }, DeployTimeoutMs());
@@ -320,7 +321,9 @@ async function LaunchGameOnDeployserverNow(GameMode: string, GameArgs: string, H
         const body = MatchmakingResult.body;
         if (body?.error === 'capacity_unavailable' && ['memory', 'ports', 'hunts', 'cpu'].includes(body.reason)) {
             logger.warn({reason: body.reason, huntId: HuntId, capacityWaitMs: CAPACITY_WAIT_MS}, 'mm: allocation waiting for capacity');
-            return {...Failed, capacity: true};
+            const seconds = Number(MatchmakingResult.retryAfter);
+            const retryAfterMs = MatchmakingResult.retryAfter?.trim() && Number.isFinite(seconds) && seconds > 0 ? Math.min(30_000, Math.max(CAPACITY_RETRY_MS, seconds * 1000)) : CAPACITY_RETRY_MS;
+            return {...Failed, capacity: true, retryAfterMs};
         }
         return Failed;
     }
@@ -397,7 +400,7 @@ async function PopQueue(HuntId: string, MatchmakingQueue: MatchmakingQueueData |
         MatchmakingQueue.CapacityDeadline ??= PartyNow() + CAPACITY_WAIT_MS;
         if (PartyNow() < MatchmakingQueue.CapacityDeadline && MatchmakingQueue.Players.length > 0) {
             MatchmakingQueue.Resolved = false;
-            MatchmakingQueue.RetryAfter = PartyNow() + CAPACITY_RETRY_MS;
+            MatchmakingQueue.RetryAfter = PartyNow() + (GameOnDeployServer.retryAfterMs ?? CAPACITY_RETRY_MS);
             // Keep taking joiners while waiting: dropped from the map, every new player for this hunt
             // opened a queue of its own, asked for another server and made the capacity wait worse
             const QueueKey = RegionQueueKey(HuntId, MatchmakingQueue.Region);
@@ -476,7 +479,7 @@ export async function CheckAndUpdateQueueStatus(PlayerId: string){
             if (!waiting.busy && PartyNow() >= waiting.next) {
                 waiting.busy = true;
                 waiting.next = PartyNow() + CAPACITY_RETRY_MS;
-                await WaitBriefly(waiting.retry().then(Done => { if (Done) CapacityWaits.delete(PlayerMatchmakingResult.CandidateId); }).finally(() => { waiting.busy = false; }));
+                await WaitBriefly(waiting.retry().then(Done => { if (Done) CapacityWaits.delete(PlayerMatchmakingResult.CandidateId); }).finally(() => { waiting.next = PartyNow() + waiting.retryMs(); waiting.busy = false; }));
             }
         }
         return MatchmakingResultMap.get(PlayerId);
@@ -865,6 +868,7 @@ async function StartPartyCandidate(TheParty: Party, GameMode: string, HuntId: st
 
     logger.info(`mm: party P=${TheParty.PartyId} candidate ${CandidateId} mode=${GameMode} hunt=${HuntId} members=${Members.join(",")} by=${LeaderId}`);
 
+    let retryMs = CAPACITY_RETRY_MS;
     const TryLaunch = async () => {
         const Active = Members.filter(member => {
             const entry = MatchmakingResultMap.get(member);
@@ -882,6 +886,7 @@ async function StartPartyCandidate(TheParty: Party, GameMode: string, HuntId: st
             return true;
         }
         if (Game.capacity) {
+            retryMs = Game.retryAfterMs ?? CAPACITY_RETRY_MS;
             MatchmakingRoster.releaseAllocation(allocationId);
             if (TheParty.Candidate?.CandidateId === CandidateId) TheParty.Candidate.LaunchDeadline = undefined;
             for (const member of Active) {
@@ -895,7 +900,7 @@ async function StartPartyCandidate(TheParty: Party, GameMode: string, HuntId: st
         return true;
     };
     const Launch = TryLaunch()
-        .then(async done => { if (!done && !ParkCapacity(CandidateId, TryLaunch)) await FinishPartyCandidate(TheParty, CandidateId, Members, {succeeded: false, readyNow: false, host: '', port: 0}); })
+        .then(async done => { if (!done && !ParkCapacity(CandidateId, TryLaunch, () => retryMs)) await FinishPartyCandidate(TheParty, CandidateId, Members, {succeeded: false, readyNow: false, host: '', port: 0}); })
         .catch((error) => {
             FailCandidate(CandidateId, 'party allocation failed');
             logger.error(`mm: party candidate ${CandidateId} launch failed: ${(error as Error)?.message}`);
@@ -1151,6 +1156,7 @@ async function HandlePlayerMatchmakingOnce(GameMode: string, GameArgs: string, H
             // Publish the attempt before any network wait. A cancellation or a new
             // hunt can replace it immediately; this request may only finish its own entry.
             StoreEntry(PlayerId, Entry);
+            let retryMs = CAPACITY_RETRY_MS;
             const TryLaunch = async () => {
                 if (MatchmakingResultMap.get(PlayerId) !== Entry || Entry.Failed) return true;
                 const deadline = PartyNow() + DeployTimeoutMs();
@@ -1166,6 +1172,7 @@ async function HandlePlayerMatchmakingOnce(GameMode: string, GameArgs: string, H
                     return true;
                 }
                 if (result.capacity) {
+                    retryMs = result.retryAfterMs ?? CAPACITY_RETRY_MS;
                     Entry.LaunchDeadline = undefined;
                     return false;
                 }
@@ -1173,7 +1180,7 @@ async function HandlePlayerMatchmakingOnce(GameMode: string, GameArgs: string, H
                 return true;
             };
             const launch = TryLaunch().then(done => {
-                if (!done && MatchmakingResultMap.get(PlayerId) === Entry && !Entry.Failed && !ParkCapacity(Entry.CandidateId, TryLaunch))
+                if (!done && MatchmakingResultMap.get(PlayerId) === Entry && !Entry.Failed && !ParkCapacity(Entry.CandidateId, TryLaunch, () => retryMs))
                     FailCandidate(Entry.CandidateId, 'capacity wait unavailable');
             }).catch(error => {
                 FailCandidate(Entry.CandidateId, 'direct allocation failed');
