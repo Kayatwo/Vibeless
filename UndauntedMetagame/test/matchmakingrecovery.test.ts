@@ -419,3 +419,26 @@ for (const kind of ['private', 'direct', 'party'] as const) {
         assert.equal(posts.length, 2);
     });
 }
+
+for (const [header, delay] of [[null,3000],['invalid',3000],['10',10000],['999999',30000]] as const) {
+    it(`party polls honor bounded Retry-After ${header} without duplicate launches`, async () => {
+        deploy = async () => { const response=full(); if(header!==null)response.headers.set('Retry-After',header); return response; };
+        await formParty();
+        await HandlePlayerMatchmaking('ISLAND','',HUNT,A);
+        await flush();
+        assert.equal(posts.length,1);
+        now += delay-1;
+        TouchPlayer(A); TouchPlayer(B);
+        await Promise.all([CheckAndUpdateQueueStatus(A),CheckAndUpdateQueueStatus(B),CheckAndUpdateQueueStatus(A)]);
+        assert.equal(posts.length,1);
+        const pending=deferred<Response>(); deploy=()=>pending.promise;
+        now += 1;
+        const polls=Promise.all([CheckAndUpdateQueueStatus(A),CheckAndUpdateQueueStatus(B),CheckAndUpdateQueueStatus(A)]);
+        await flush();
+        assert.equal(posts.length,2);
+        pending.resolve(ready());
+        await polls;
+        assert.equal((await CheckAndUpdateQueueStatus(A))?.Ready,true);
+        assert.equal((await CheckAndUpdateQueueStatus(B))?.Ready,true);
+    });
+}

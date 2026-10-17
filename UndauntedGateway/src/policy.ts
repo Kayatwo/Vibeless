@@ -133,7 +133,9 @@ export function Classify(Method: string | undefined, RawUrl: string | undefined,
         return { action: "proxy", upstream: "content", limitClass: LimitClass };
     }
 
-    if(Verb === "POST" && Canonical === "/heartbeat"){
+    // /game/login returns 2xx only after bearer validation and account lookup.
+    // Reuse the bearer-required feed so travel need not wait for a heartbeat.
+    if(Verb === "POST" && (Canonical === "/heartbeat" || Canonical === "/game/login")){
         return { action: "proxy", upstream: "metagame", limitClass: LimitClass, feed: "heartbeat" };
     }
     if(Verb === "POST" && Canonical === "/account/api/oauth/token"){

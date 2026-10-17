@@ -85,6 +85,15 @@ describe("Classify", () => {
         assert.equal((Classify("POST", "/account/api/oauth/verify", {}, false) as any).feed, undefined);
     });
 
+    it("only POST game login receives the bearer-required allowlist feed", () => {
+        for(const route of ["/game/login", "/GAME/LOGIN/", "/game/login?x=1"]){
+            assert.equal((Classify("POST", route, {}, false) as any).feed, "heartbeat");
+        }
+        for(const [method, route] of [["GET", "/game/login"], ["POST", "/game/loginx"], ["POST", "/game/login/extra"]]){
+            assert.equal((Classify(method, route, {}, false) as any).feed, undefined);
+        }
+    });
+
     it("puts Register and the token route in their own rate-limit classes", () => {
         assert.equal(Classify("POST", "/undaunted/api/Register", {}, false).limitClass, "register");
         assert.equal(Classify("POST", "/undaunted/api/register/", {}, false).limitClass, "register");
