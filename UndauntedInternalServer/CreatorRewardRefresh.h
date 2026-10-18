@@ -1,13 +1,9 @@
 #pragma once
 #include "SDK.hpp"
 
-// Client-only pilot. The backend owns the award; this only asks the owned
+// The backend owns the award; this client only asks the owned
 // inventory actor to reload it and reports an observed balance change.
 namespace CreatorRewardRefresh {
-inline bool Enabled() {
-    static const bool Value = [] { char Flag[2]{}; return GetEnvironmentVariableA("DR_CREATOR_REWARD_TEST", Flag, 2) == 1 && Flag[0] == '1'; }();
-    return Value;
-}
 inline SDK::AArchonInventory* LocalInventory() {
     for(int32_t I = 0; I < SDK::UObject::GObjects->Num(); ++I){
         auto* Object = SDK::UObject::GObjects->GetByIndex(I);
@@ -27,7 +23,6 @@ inline void Notify(const wchar_t* Message) {
     }
 }
 inline void OnProcessEvent(SDK::UObject* Object, SDK::UFunction* Function) {
-    if(!Enabled()) return;
     static bool Updating = false;
     if(Updating) return;
     struct Guard { bool& Value; Guard(bool& V): Value(V) { Value = true; } ~Guard() { Value = false; } } Guard(Updating);

@@ -2,25 +2,19 @@
 #include "SDK.hpp"
 #include <chrono>
 
-// Isolated 1.4.4 pilot: enable real vendor purchasing before tab creation.
+// Enable native vendor purchasing before tab creation; native quest/price checks remain.
 namespace GrannyPurchaseTabs {
 inline void* OriginalFeatureCheck = nullptr;
-inline bool Enabled() {
-    char Value[2]{};
-    return GetEnvironmentVariableA("DR_GRANNY_TEST", Value, 2) == 1 && Value[0] == '1';
-}
 inline bool FeatureCheck(const SDK::UObject* Context, SDK::UClass* Feature) {
     if (Feature && Feature == SDK::UPurchasesAtVendorFeature::StaticClass()) return true;
     return reinterpret_cast<bool(*)(const SDK::UObject*, SDK::UClass*)>(OriginalFeatureCheck)(Context, Feature);
 }
 inline void Install(uintptr_t Base) {
-    if (!Enabled()) return;
     auto* Target = reinterpret_cast<void*>(Base + 0x14B0F70);
     if (MH_CreateHook(Target, FeatureCheck, &OriginalFeatureCheck) == MH_OK)
         MH_EnableHook(Target);
 }
 inline void Observe(SDK::UObject* Object) {
-    if (!Enabled()) return;
     static SDK::UCraftingScreen* Screen = nullptr;
     static int32_t Index = -1;
     static std::chrono::steady_clock::time_point NextCheck{};

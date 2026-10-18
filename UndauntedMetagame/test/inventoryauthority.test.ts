@@ -25,6 +25,25 @@ test('authenticated native reward still succeeds and identical retry grants once
  assert.equal((await Call('POST','/inventory',{gs:true,body})).status,200);
  assert.equal(StackQuantity(p.CharacterId,'CURRENCY_NOTES'),5);
 });
+
+test('Rams purchases refuse stale balances atomically even with legacy material clamping',async()=>{
+ const p=await MakePlayer();
+ const prior=process.env.INVENTORY_REFUSE_OVERSPEND;
+ process.env.INVENTORY_REFUSE_OVERSPEND='0';
+ try {
+  assert.equal((await Call('POST','/inventory',{gs:true,body:{accountId:p.UserId,characterId:p.CharacterId,transactionId:'tonic-funds',addStackedItems:[{catalogId:'CURRENCY_NOTES',quantity:350}]}})).status,200);
+  const buy=(id:string)=>Call('POST','/inventory',{gs:true,body:{accountId:p.UserId,characterId:p.CharacterId,transactionId:id,removeStackedItems:[{catalogId:'CURRENCY_NOTES',quantity:350}],addStackedItems:[{catalogId:'QI_STAGGER_POTION',quantity:1}]}});
+  const replies=await Promise.all([buy('tonic-a'),buy('tonic-b')]);
+  assert.deepEqual(replies.map(r=>r.status).sort(),[200,409]);
+  assert.equal(StackQuantity(p.CharacterId,'CURRENCY_NOTES'),0);
+  assert.equal(StackQuantity(p.CharacterId,'QI_STAGGER_POTION'),1);
+  const accepted=replies[0].status===200?'tonic-a':'tonic-b';
+  assert.equal((await buy(accepted)).status,200);
+  assert.equal(StackQuantity(p.CharacterId,'QI_STAGGER_POTION'),1);
+ } finally {
+  if(prior===undefined)delete process.env.INVENTORY_REFUSE_OVERSPEND;else process.env.INVENTORY_REFUSE_OVERSPEND=prior;
+ }
+});
 test('foreign character, invented catalog, negative quantity and impossible upgrade cannot mutate inventory',async()=>{
  const p=await MakePlayer(),other=await MakePlayer();
  for(const body of [

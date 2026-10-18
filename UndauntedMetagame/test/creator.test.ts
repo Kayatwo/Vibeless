@@ -126,6 +126,19 @@ it("a missing character does not burn the account's code", async () => {
     assert.equal(StackQuantity(C.id, "CURRENCY_NOTES"), 10000);
 });
 
+it("invalid or overflowing native Rams balances do not consume a reward", async () => {
+    const A = await MakePlayer();
+    GetDb().insert(inventory).values({characterId: A.CharacterId, stackedItems: "[]", instancedItems: "[]"}).run();
+    for(const quantity of [-1, "68000", 2147483647, 1.5]){
+        GetDb().update(inventory).set({stackedItems: JSON.stringify([{catalogId: "CURRENCY_NOTES", quantity}])}).where(eq(inventory.characterId, A.CharacterId)).run();
+        assert.equal((await Call("POST", "/creator", {as: A.UserId, body: {slug: "Void"}})).status, 409);
+        assert.equal(GetCreatorSupport(A.UserId).success, false);
+    }
+    GetDb().update(inventory).set({stackedItems: JSON.stringify([{catalogId: "CURRENCY_NOTES", quantity: 2147473647}])}).where(eq(inventory.characterId, A.CharacterId)).run();
+    RedeemCreatorCode(A.UserId, "Void");
+    assert.equal(StackQuantity(A.CharacterId, "CURRENCY_NOTES"), 2147483647);
+});
+
 it("the audit log records the grant source and only one permanent receipt", async () => {
     const A = await MakePlayer();
     RedeemCreatorCode(A.UserId, "Void");

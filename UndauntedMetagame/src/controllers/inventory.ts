@@ -273,7 +273,9 @@ export function ApplyStackedChanges(StackedItems: any[], StackedItemsToRemove: a
         if(Quantity > Held + AddedHere){
             const Message = `removes ${Quantity} of ${CatalogId} but only ${Held} held${AddedHere > 0 ? ` and ${AddedHere} added` : ""}`;
 
-            if(RefuseOverspend){
+            // Rams purchases must never succeed against a stale native balance,
+            // even on hosts retaining legacy clamping for other materials.
+            if(RefuseOverspend || CatalogId === "CURRENCY_NOTES"){
                 throw new InventoryInsufficientError(Message);
             }
 
