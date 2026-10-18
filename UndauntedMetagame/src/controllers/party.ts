@@ -58,6 +58,7 @@ export type PartyCandidate = {
     SessionId?: string,
     AllocatedAt?: number,
     LaunchDeadline?: number,
+    CapacityDeadline?: number, // renewed only by active matchmaking status polls
     CreatedAt: number,
     LastServedAt?: number
 };
@@ -248,8 +249,8 @@ function ExpireCandidate(TheParty: Party){
     else if(AllServed && Candidate.LastServedAt !== undefined && Now - Candidate.LastServedAt > CANDIDATE_LINGER_MS){
         Why = "every member was sent to the server";
     }
-    else if(Candidate.State === 'MATCHING' && Candidate.LaunchDeadline !== undefined
-        ? Now > Candidate.LaunchDeadline
+    else if(Candidate.State === 'MATCHING' && (Candidate.LaunchDeadline ?? Candidate.CapacityDeadline) !== undefined
+        ? Now > (Candidate.LaunchDeadline ?? Candidate.CapacityDeadline)!
         : Now - (Candidate.AllocatedAt ?? Candidate.CreatedAt) > CANDIDATE_MAX_AGE_MS){
         Why = "too old";
     }
@@ -859,6 +860,7 @@ export function MarkPartyCandidateReady(TheParty: Party, CandidateId: string, Ho
 
     if(Candidate != null && Candidate.CandidateId === CandidateId){
         Candidate.State = "IN_PROGRESS";
+        Candidate.CapacityDeadline = undefined;
         Candidate.Host = Host;
         Candidate.Port = Port;
         TheParty.LastCandidate = Candidate;

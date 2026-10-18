@@ -11,3 +11,8 @@ Validation: TypeScript builds and69 focused matchmaking tests pass, including20-
 ## Activated
 
 User approved immediate activation. Hash-checked script applied both modules, backup C:/DauntlessRevived/backups/fair-queues-20261018-020915. Backend-only restart recovered as PID3468 on61000; deploy PID5976 and hunt processes stayed running. Verification returned publicHTTP200, dashboard error:null, fivehosts reporting,213players and huntcounts9/32/21/34 on gamehosts. This supersedes staged-only status above. Client waiting-screen presentation and live saturated-queue fairness still require gameplay observation; automated69-test coverage remains the behavioral evidence.
+
+## Party expiry follow-up
+A party candidate still expired after five minutes when capacity waiting cleared LaunchDeadline. Its retry could silently finish while MATCHING entries kept touching FIFO priority. Added a CapacityDeadline renewed only by matchmaking status polling, plus explicit failure/release for orphaned candidates. Social polling alone cannot keep an abandoned queue alive.
+
+Validation: TypeScript build and 112 targeted tests passed, including a 20-minute active party wait, idle expiry, and orphan recovery allowing the next hunt. Backend-only deployment backup: C:/DauntlessRevived/backups/party-queue-fix-20261018-025709. This explains a possible Preparing Hunt deadlock; the exact live DragoneerLaila candidate was not proven to be the orphan.
