@@ -815,6 +815,8 @@ static bool IsPotionPurchaseQuestOpen() {
 }
 
 #include "GrannyPurchaseTabs.h"
+#include "CreatorRewardRefresh.h"
+
 
 void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
 
@@ -827,6 +829,8 @@ void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
     DualSenseIcons::OnProcessEvent();
     NoPlatinumPrice::OnProcessEvent(Object);
     GrannyPurchaseTabs::Observe(Object);
+    CreatorRewardRefresh::OnProcessEvent(Object, Function);
+
 
 
     DeveloperStyle::OnProcessEvent(Object, Function);

@@ -243,7 +243,8 @@ const EXPECTED_ROUTES = [
     "POST /inventory [HasUndauntedMetagameAuth]",
     "POST /inventory/instanceditem [HasUndauntedMetagameAuth]",
     "POST /reconcile [HasUndauntedMetagameAuth]",
-    "GET /creator [HasUndauntedMetagameAuth]",
+    "GET /creator [CreatorAuth, PlayerTokenOnly]",
+    "POST /creator [CreatorAuth, PlayerTokenOnly]",
     "GET /balance [HasUndauntedMetagameAuth]",
     // The store offers' icons: public 1.4.4 item art, fetched by the client's image download without a token
     "GET /store-images/:file []",

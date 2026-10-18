@@ -10,6 +10,9 @@ import { BalanceFromInventory } from "../features";
 import { PlayerMutationRateLimit, StoreImageRateLimit } from "../middleware/RateLimits";
 import { RamsWireOffer, RamsWireCurrency } from "../controllers/ramspricing";
 import StoreCatalog from '../vendor/store_catalog.json';
+import { GetCreatorSupport, RedeemCreatorCode } from "../controllers/creator";
+import { InventoryErrorOf } from "../controllers/inventory";
+
 
 const MainShopSkus = new Set(StoreCatalog.webstore.map(offer=>offer.id));
 function RequireRamsClient(req: any, applies: boolean){
@@ -55,17 +58,40 @@ storeRouter.post("/reconcile", HasUndauntedMetagameAuth, async (req: any, res) =
     });
 });
 
-storeRouter.get("/creator", HasUndauntedMetagameAuth, async (req: any, res) => {
-    logger.info("SupportACreator (stubbed)");
+// Native creator requests also carry their player token in X-Epic-Authorization
+// (GET) or authorization in the JSON body (POST). Never accept an account ID.
+const CreatorAuth: import("express").RequestHandler = (req, res, next) => {
+    if(req.headers.authorization === undefined){
+        const Token = req.headers["x-epic-authorization"] ?? req.body?.authorization;
+        if(typeof Token === "string" && Token.length <= 8192){
+            req.headers.authorization = /^bearer /i.test(Token) ? Token : `bearer ${Token}`;
+        }
+    }
+    return HasUndauntedMetagameAuth(req, res, next);
+};
 
-    res.status(200);
-    res.json({
-        "expirationDate": "2099-01-01T01:00:00.041Z",
-        "slug": "MROWMROW",
-        "success": true
-    });
-})
+storeRouter.get("/creator", CreatorAuth, PlayerTokenOnly, (req: any, res) => {
+    res.set("Cache-Control", "no-store").json(GetCreatorSupport(req.AuthData.userId));
+});
 
+storeRouter.post("/creator", CreatorAuth, PlayerTokenOnly, PlayerMutationRateLimit, (req: any, res) => {
+    res.set("Cache-Control", "no-store");
+    try{
+        res.json(RedeemCreatorCode(req.AuthData.userId, req.body?.slug));
+    }
+    catch(error){
+        if(error instanceof StoreError){
+            res.status(error.Status).json({success: false, message: error.message});
+        }
+        else if(InventoryErrorOf(error) !== undefined){
+            res.status(409).json({success: false, message: "Inventory could not receive the reward; try again later"});
+        }
+        else{
+            logger.error("Creator reward could not be committed");
+            res.status(500).json({success: false, message: "Could not redeem the creator code; try again later"});
+        }
+    }
+});
 storeRouter.get("/balance", HasUndauntedMetagameAuth, async (req: any, res) => {
     const UserId = req.AuthData.userId;
 
