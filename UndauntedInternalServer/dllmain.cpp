@@ -814,7 +814,10 @@ static bool IsPotionPurchaseQuestOpen() {
     return false;
 }
 
+#include "GrannyPurchaseTabs.h"
+
 void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
+
     RamsStorePilot::Scope RamsScope(Object, Function, Parms);
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEventClient)(Object, Function, Parms);
 
@@ -823,6 +826,9 @@ void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
     AutoPressStart::OnProcessEvent(Object, Function);
     DualSenseIcons::OnProcessEvent();
     NoPlatinumPrice::OnProcessEvent(Object);
+    GrannyPurchaseTabs::Observe(Object);
+
+
     DeveloperStyle::OnProcessEvent(Object, Function);
 
     static UFunction* CanPurchase = nullptr;
@@ -966,6 +972,8 @@ void EACClientInitHook(void* a1) {
 
 void InitClientHooks() {
     MH_Initialize();
+    GrannyPurchaseTabs::Install(Globals::BaseAddress);
+
     RamsStorePilot::Install(Globals::BaseAddress);
 
     DualSense::Install();
@@ -1025,6 +1033,8 @@ int NetModeHook(void* a1) { //char __fastcall UArchonStaminaComponent_TryConsume
 
 void InitServerHooks() {
     MH_Initialize();
+    GrannyPurchaseTabs::Install(Globals::BaseAddress);
+
     Networking::InitChannelTracking(Globals::BaseAddress);
 
     // SYSTEM and service accounts do not inherit a launcher-generated Game.ini.
