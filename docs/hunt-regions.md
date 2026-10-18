@@ -19,7 +19,13 @@ An explicit OCE selection never silently falls back to Main. If AUS is unavailab
 
 ## Hunt cleanup
 
-The watchdog checks every minute. `HUNT_MAX_AGE_MINUTES=120` stops temporary hunts/tutorials after two hours, including occupied instances. `HUNT_EMPTY_MINUTES=10` permits earlier retirement only after continuously fresh native zero-connection readings. Missing/stale readings reset the empty timer. Ramsgate and Training are exempt. Ports are released only after the original child exits.
+The watchdog checks every 15 seconds. Ramsgate and Training are exempt from all of it, and ports are released only after the original child exits. A temporary hunt or tutorial is stopped for one of three reasons:
+
+- `max-age`: `HUNT_MAX_AGE_MINUTES=120` stops it after two hours, including occupied instances. This is the ceiling, and it is the only reason that does not depend on telemetry.
+- `empty`: `HUNT_EMPTY_MINUTES=10` retires it earlier after continuously fresh native zero-connection readings. A positive count, a missing reading or an observation gap over 90 seconds resets the timer.
+- `silent`: `HUNT_SILENT_MINUTES=15` retires an instance that reports no telemetry at all **while another instance on the same host is still reporting**. A process whose net driver never started listening writes no diagnostics and never runs its own idle shutdown either, so without this it survives to the ceiling. When no instance on the host reports — native diagnostics off, or `GAMESERVER_READY_DIR` unset — silence proves nothing and nothing is stopped for it.
+
+An instance that never wrote its ready file is judged on the same occupancy rules once `HUNT_UNREADY_GRACE_MINUTES=5` has passed from its start, rather than being exempt from cleanup for want of a readiness timestamp.
 
 ## Operations and verification
 
