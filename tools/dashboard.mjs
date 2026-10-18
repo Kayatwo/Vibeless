@@ -38,13 +38,13 @@ const cpuTimes = () => os.cpus().reduce((sum, cpu) => {
   return sum;
 }, {idle: 0, total: 0});
 
-export async function startDashboard({key, backend, port = 61110, logs = {}, serverConfig = null, performanceDir = null, workerUrl = null, ausUrl = null, germanyUrl = null, fetcher = fetch}) {
+export async function startDashboard({key, backend, port = 61110, logs = {}, serverConfig = null, performanceDir = null, workerUrl = null, ausUrl = null, germanyUrl = null, eu2Url = null, fetcher = fetch}) {
   if (typeof key !== 'string' || key.length < 16) throw new Error('An owner key of at least 16 characters is required');
   const target = new URL(backend);
   if (target.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) || target.username || target.password) throw new Error('Backend must be loopback HTTP');
   const page = await readFile(new URL('./dashboard.html', import.meta.url));
   if (serverConfig && (serverConfig.Mode !== 'Public' || !/^[a-z0-9.-]+$/i.test(serverConfig.PublicHost || '') || !Number.isInteger(serverConfig.Ports?.gateway) || serverConfig.Ports.gateway < 1 || serverConfig.Ports.gateway > 65535 || !/^[a-f0-9]{64}$/i.test(serverConfig.CertFingerprint || ''))) throw new Error('Invalid public server configuration');
-  const [workerMonitor,ausMonitor,germanyMonitor] = await Promise.all([monitorWorker(workerUrl,'Server #2',fetcher),monitorWorker(ausUrl,'Server #3',fetcher),monitorWorker(germanyUrl,'Server #4',fetcher)]);
+  const [workerMonitor,ausMonitor,germanyMonitor,eu2Monitor] = await Promise.all([monitorWorker(workerUrl,'Server #2',fetcher),monitorWorker(ausUrl,'Server #3',fetcher),monitorWorker(germanyUrl,'Server #4',fetcher),monitorWorker(eu2Url,'Server #5',fetcher)]);
 
   let previous = cpuTimes(), known = null, added = 0, sample = null, failure = null, polling = false;
   const history = [];
@@ -60,7 +60,17 @@ export async function startDashboard({key, backend, port = 61110, logs = {}, ser
         if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? 'Backend rejected the dashboard owner key' : 'Backend HTTP ' + response.status);
         return response.json();
       };
-      const [accounts, status] = await Promise.all([accountCache && Date.now() - accountsAt < 60000 ? accountCache : get('/undaunted/api/GetAllUsers'), get('/undaunted/api/ServerStatus')]);
+      const [accounts, status, allocation] = await Promise.all([
+        accountCache && Date.now() - accountsAt < 60000 ? accountCache : get('/undaunted/api/GetAllUsers'), get('/undaunted/api/ServerStatus'),
+        (async () => {
+          try {
+            const response = await fetcher(new URL(`http://127.0.0.1:${serverConfig?.Ports?.deploy || 61001}/gameservers`), {signal: AbortSignal.timeout(5000), redirect: 'error'});
+            if (!response.ok) return null;
+            const data = await response.json();
+            return {capacity: data.capacity, capacitySampleAt: new Date().toISOString()};
+          } catch { return null; }
+        })()
+      ]);
       let health = null;
       let healthError = null;
       let discord = null;
@@ -86,7 +96,7 @@ export async function startDashboard({key, backend, port = 61110, logs = {}, ser
         backendRssMB: health?.memoryMB?.rss ?? null, backendHeapMB: health?.memoryMB?.heapUsed ?? null};
       history.push(point);
       if (history.length > 720) history.shift();
-      sample = { ...point, players: status.players, instances: status.instances, history, uptimeSeconds: status.uptimeSeconds, hostUptimeSeconds: os.uptime(), dashboardUptimeSeconds: process.uptime(), locations, health, healthError, discord, performance: performanceSample, logicalCpus: os.cpus().length, name: status.name };
+      sample = { ...point, capacity: allocation?.capacity ?? null, capacitySampleAt: allocation?.capacitySampleAt ?? null, players: status.players, instances: status.instances, history, uptimeSeconds: status.uptimeSeconds, hostUptimeSeconds: os.uptime(), dashboardUptimeSeconds: process.uptime(), locations, health, healthError, discord, performance: performanceSample, logicalCpus: os.cpus().length, name: status.name };
       failure = null;
     } catch (error) { failure = (error.name === 'TimeoutError' ? 'Backend response timed out' : /^Backend (HTTP |rejected)/.test(error.message) ? error.message : 'Backend unavailable (connection failed)') + '; last readings are stale.'; }
     finally { polling = false; }
@@ -209,7 +219,7 @@ export async function startDashboard({key, backend, port = 61110, logs = {}, ser
       finally { inviting = false; }
       return;
     }
-    if (req.url === '/api/status') { res.end(JSON.stringify({sample, worker:workerMonitor.state, aus:ausMonitor.state, germany:germanyMonitor.state, fleet:fleetSummary(sample,workerMonitor.state,failure,Date.now(),ausMonitor.state,germanyMonitor.state), error: failure, logNames: Object.keys(logs), invitesEnabled: !!serverConfig})); return; }
+    if (req.url === '/api/status') { res.end(JSON.stringify({sample, worker:workerMonitor.state, aus:ausMonitor.state, germany:germanyMonitor.state, eu2:eu2Monitor.state, fleet:fleetSummary(sample,workerMonitor.state,failure,Date.now(),ausMonitor.state,germanyMonitor.state,eu2Monitor.state), error: failure, logNames: Object.keys(logs), invitesEnabled: !!serverConfig})); return; }
     if (req.url?.startsWith('/api/log?')) {
       const name = new URL(req.url, 'http://localhost').searchParams.get('name');
       if (!name || !Object.hasOwn(logs, name)) { res.writeHead(404).end(); return; }
@@ -222,10 +232,10 @@ export async function startDashboard({key, backend, port = 61110, logs = {}, ser
     }
     res.writeHead(404).end();
   });
-  server.on('close', () => { clearInterval(timer); workerMonitor.close(); ausMonitor.close(); germanyMonitor.close(); });
+  server.on('close', () => { clearInterval(timer); workerMonitor.close(); ausMonitor.close(); germanyMonitor.close(); eu2Monitor.close(); });
   server.requestTimeout = 10000;
   try { await new Promise((yes, no) => { server.once('error', no); server.listen(port, '127.0.0.1', yes); }); }
-  catch (error) { clearInterval(timer); workerMonitor.close(); ausMonitor.close(); germanyMonitor.close(); throw error; }
+  catch (error) { clearInterval(timer); workerMonitor.close(); ausMonitor.close(); germanyMonitor.close(); eu2Monitor.close(); throw error; }
   return server;
 }
 
@@ -237,7 +247,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const port = Number(process.env.DASHBOARD_PORT || 61110);
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid dashboard port');
     const serverConfig = process.env.DASHBOARD_SERVER_CONFIG ? JSON.parse(await readFile(process.env.DASHBOARD_SERVER_CONFIG, 'utf8')) : null;
-    await startDashboard({key, backend: process.env.DASHBOARD_BACKEND || 'http://127.0.0.1:61000', port, logs, serverConfig, performanceDir: process.env.DASHBOARD_PERFORMANCE_DIR || null, workerUrl: process.env.DASHBOARD_WORKER_URL || null, ausUrl: process.env.DASHBOARD_AUS_URL || null, germanyUrl: process.env.DASHBOARD_GERMANY_URL || null});
+    await startDashboard({key, backend: process.env.DASHBOARD_BACKEND || 'http://127.0.0.1:61000', port, logs, serverConfig, performanceDir: process.env.DASHBOARD_PERFORMANCE_DIR || null, workerUrl: process.env.DASHBOARD_WORKER_URL || null, ausUrl: process.env.DASHBOARD_AUS_URL || null, germanyUrl: process.env.DASHBOARD_GERMANY_URL || null, eu2Url: process.env.DASHBOARD_EU2_URL || null});
     console.log(`Owner dashboard: http://127.0.0.1:${port} (use an SSH tunnel remotely)`);
   })().catch(() => { console.error('Dashboard startup failed. Check owner key file, settings and port.'); process.exitCode = 1; });
 }

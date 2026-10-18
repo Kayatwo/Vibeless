@@ -20,19 +20,25 @@ export function payload(sample, now = Date.now(), fleet = null) {
   const names={1:'EU',2:'Key bot',3:'US (NA)',4:'Germany',5:'EU overflow'};
   for(const r of fleet?.rows ?? []){
     const name=`Server #${r.id} · ${names[r.id] ?? 'Worker'}`;
-    const age=r.at===null?'No sample':`Sample <t:${Math.floor(r.at/1000)}:R>`;
+    const age=Number.isFinite(r.at)?`Host sample <t:${Math.floor(r.at/1000)}:R>`:'No host sample';
+    const c=r.capacity;
+    const admission=!c?'Unknown':c.blocked===true?'Waiting for CPU headroom':c.limit!==null&&c.running+c.pending>=c.limit?'Hunt limit reached':c.blocked===false?'Below CPU/count limits':'CPU status unknown';
+    const huntInfo=r.id===2?'Key distribution · no hunt hosting':`Hunts: ${Number.isInteger(r.hunts)?r.hunts:'Unknown'} / ${c?.limit??'Unknown'} · starting ${c?.pending??'Unknown'}\nAdmission: ${admission}${c?.blocked&&c.resume!==null&&c.resume!==undefined?` (resume ≤${num(c.resume,'%')})`:''}\nHunt sample: ${Number.isFinite(r.huntAt)?`<t:${Math.floor(r.huntAt/1000)}:R>`:'Unknown'}`;
+    const ramPercent=Number.isFinite(r.ramUsedMB)&&r.ramTotalMB>0?num(r.ramUsedMB/r.ramTotalMB*100,'%'):'Unknown';
     fields.push({name,inline:true,value:r?.online
-      ? `🟢 Reporting\nHunts: ${Number.isInteger(r.hunts)?r.hunts:'Unknown'}${r.capacity?` / ${r.capacity.limit??'auto'} · starting ${r.capacity.pending}\nAdmission: ${r.capacity.blocked?'waiting for CPU headroom':'accepting within limits'}`:''}\nCPU: ${num(r.cpu,'%')}\nRAM: ${num(r.ramUsedMB===null?null:r.ramUsedMB/1024)} / ${num(r.ramTotalMB===null?null:r.ramTotalMB/1024)} GB\n${age}${r.hunts===null?'\nHunt telemetry unavailable':''}`
+      ? `🟢 Host reporting\n${huntInfo}\nCPU: ${num(r.cpu,'%')}\nRAM: ${num(r.ramUsedMB===null?null:r.ramUsedMB/1024)} / ${num(r.ramTotalMB===null?null:r.ramTotalMB/1024)} GB (${ramPercent})\n${age}${r.hunts===null&&r.id!==2?'\nHunt telemetry unavailable':''}`
       : `🟠 Monitoring unavailable\n${age}\nGame availability unknown`});
   }
   if(fleet){
-    fields.push({name:'📊 Reporting hosts combined',value:`Mean CPU: ${num(fleet.meanCpu,'%')}\nRAM: ${num(fleet.ramUsedMB/1024)} / ${num(fleet.ramTotalMB/1024)} GB\n${fleet.online}/${fleet.servers} hosts reporting; unavailable hosts excluded.`});
+    fields.push({name:'📊 Reporting hosts combined',value:`Mean CPU: ${num(fleet.meanCpu,'%')}\nRAM: ${num(fleet.ramUsedMB===null?null:fleet.ramUsedMB/1024)} / ${num(fleet.ramTotalMB===null?null:fleet.ramTotalMB/1024)} GB\n${fleet.online}/${fleet.servers} hosts reporting; unavailable hosts excluded.\nHunts are server instances, not players. CPU/count headroom does not guarantee a launch; memory and readiness also apply.`});
   }
   if(online){
     const seconds=Math.floor(sample.uptime);
     fields.push({name:'Shared backend',value:`🟢 Online · ${Math.round(sample.ms)} ms local check\nUptime: ${Math.floor(seconds/86400)}d ${Math.floor(seconds%86400/3600)}h ${Math.floor(seconds%3600/60)}m\nStarted <t:${at-seconds}:R>`});
+  } else {
+    fields.push({name:'Shared backend',value:'🟠 Check unavailable · player count and uptime unknown'});
   }
-  fields.push({name:'Region guide',value:'Choose EU, Germany or US (NA) in launcher Settings. EU has an additional overflow worker. Parties follow their leader across regions. Hunt capacity and server readiness determine when a hunt can start.'});
+  fields.push({name:'Region guide',value:'Choose EU, Germany or US (NA) in launcher Settings. EU has an additional overflow worker. Parties follow their leader across regions. CPU/count headroom is not a queue-time estimate; memory and server readiness also affect launches.'});
   fields.push({name:'📥 Launcher · Cloudflare downloads',value:'[Latest launcher / release notes](https://github.com/mixutin/dauntless-revived/releases/latest). Game downloads use Cloudflare with resume support and file verification.'});
   fields.push({name:'Last checked',value:`<t:${at}:F> (<t:${at}:R>)`});
   return {allowed_mentions:{parse:[]},embeds:[{title:'Dauntless Revived · Live realm status',
@@ -147,14 +153,20 @@ export async function sampleLocalCapacity(deploy,fetcher=fetch) {
     if(!response.ok)return null;
     const {capacity:c}=await response.json();
     if(!c||![c.running,c.pending].every(n=>Number.isSafeInteger(n)&&n>=0)||!(c.limit===null||Number.isSafeInteger(c.limit)&&c.limit>=0))return null;
-    return {running:c.running,pending:c.pending,limit:c.limit,blocked:c.cpu?.blocked===true};
+    return publicCapacity(c);
   }catch{return null;}
 }
 
-export function applyLocalCapacity(fleet,capacity) {
+function publicCapacity(c) {
+  if(!c||![c.running,c.pending].every(n=>Number.isSafeInteger(n)&&n>=0)||!(c.limit===null||Number.isSafeInteger(c.limit)&&c.limit>=0))return null;
+  const n=v=>Number.isFinite(v)&&v>=0?v:null;
+  return {running:c.running,pending:c.pending,limit:c.limit,blocked:typeof c.cpu?.blocked==='boolean'?c.cpu.blocked:null,percent:n(c.cpu?.percent),cpuLimit:n(c.cpu?.limit),resume:n(c.cpu?.resume)};
+}
+
+export function applyLocalCapacity(fleet,capacity,now=Date.now()) {
   const main=fleet?.rows.find(r=>r.id===1);
   if(!main?.online||!capacity)return;
-  main.hunts=capacity.running;main.capacity=capacity;
+  main.hunts=capacity.running;main.capacity=capacity;main.huntAt=now;
   fleet.knownHunts=fleet.rows.filter(r=>r.online).reduce((n,r)=>n+(r.hunts??0),0);
   fleet.hunts=fleet.rows.every(r=>r.online&&r.hunts!==null)?fleet.knownHunts:null;
 }
@@ -178,7 +190,9 @@ export async function sampleFleet(dashboard, key, fetcher=fetch, now=Date.now())
       const at=Date.parse(row.at),huntAt=Date.parse(row.huntSampleAt??row.at);
       const fresh=t=>Number.isFinite(t)&&now-t<=30000&&t<=now+60000;
       const online=row.online===true&&fresh(at);
-      return {id,at:Number.isFinite(at)?at:null,online,
+      const capacityAt=Date.parse(row.capacitySampleAt??row.huntSampleAt??row.at);
+      return {id,at:Number.isFinite(at)?at:null,online,huntAt:Number.isFinite(huntAt)?huntAt:null,
+        capacity:online&&fresh(capacityAt)?publicCapacity(row.capacity):null,
         cpu:online?n(row.cpu):null,ramUsedMB:online?n(row.ramUsedMB):null,ramTotalMB:online?n(row.ramTotalMB):null,
         hunts:online&&Number.isFinite(huntAt)&&now-huntAt<=150000&&huntAt<=now+60000&&Number.isInteger(row.hunts)&&row.hunts>=0?row.hunts:null};
     });
@@ -187,7 +201,7 @@ export async function sampleFleet(dashboard, key, fetcher=fetch, now=Date.now())
       knownHunts:reporting.reduce((v,r)=>v+(r.hunts??0),0),
       hunts:rows.every(r=>r.online&&r.hunts!==null)?rows.reduce((v,r)=>v+r.hunts,0):null,
       meanCpu:cpus.length?cpus.reduce((v,r)=>v+r.cpu,0)/cpus.length:null,
-      ramUsedMB:reporting.reduce((v,r)=>v+(r.ramUsedMB??0),0),
-      ramTotalMB:reporting.reduce((v,r)=>v+(r.ramTotalMB??0),0)};
+      ramUsedMB:reporting.length&&reporting.every(r=>r.ramUsedMB!==null)?reporting.reduce((v,r)=>v+r.ramUsedMB,0):null,
+      ramTotalMB:reporting.length&&reporting.every(r=>r.ramTotalMB!==null)?reporting.reduce((v,r)=>v+r.ramTotalMB,0):null};
   }catch{return null;}
 }

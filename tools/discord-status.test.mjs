@@ -101,10 +101,32 @@ test('stale timestamps cannot claim healthy hosts or complete hunt totals',async
 
 test('main hunt count comes from local admission, never the aggregated fleet list',async()=>{
  const c=await sampleLocalCapacity('http://127.0.0.1:61001',async()=>Response.json({capacity:{running:4,pending:1,limit:10,cpu:{blocked:true}},servers:Array(80).fill({kind:'hunt'})}));
- assert.deepEqual(c,{running:4,pending:1,limit:10,blocked:true});
+ assert.deepEqual(c,{running:4,pending:1,limit:10,blocked:true,percent:null,cpuLimit:null,resume:null});
  const f={rows:[{id:1,online:true,hunts:null},{id:5,online:true,hunts:30}]};
  applyLocalCapacity(f,c);assert.equal(f.hunts,34);assert.equal(f.knownHunts,34);
  f.rows[1].online=false;applyLocalCapacity(f,c);assert.equal(f.hunts,null);assert.equal(f.knownHunts,4);
  assert.equal(await sampleLocalCapacity('http://127.0.0.1:61001',async()=>Response.json({capacity:{running:-1,pending:0,limit:10}})),null);
  await assert.rejects(sampleLocalCapacity('https://example.com'));
+});
+
+test('worker admission is fresh, allowlisted and distinguishes CPU pressure from hunt limits',async()=>{
+ const now=1700000000000,at=new Date(now).toISOString();
+ const capacity={running:36,pending:2,limit:38,cpu:{blocked:true,percent:94.4,limit:80,resume:65},secret:'SECRET'};
+ const rows=[{name:'Server #3',at,huntSampleAt:at,capacitySampleAt:at,online:true,cpu:94.4,ramUsedMB:16384,ramTotalMB:32768,hunts:36,capacity},
+ {name:'Server #5',at,huntSampleAt:at,online:true,hunts:42,capacity:{...capacity,running:42,pending:0,limit:42,cpu:{blocked:false}}},
+ {name:'Server #4',at,online:true,hunts:10,capacitySampleAt:new Date(now-31000).toISOString(),capacity}];
+ const f=await sampleFleet('http://127.0.0.1:61110','test',async()=>Response.json({fleet:{rows}}),now);
+ assert.equal(f.rows[0].capacity.resume,65);assert.equal(f.rows[2].capacity,null);
+ const b=payload({players:100,uptime:30,ms:20},now,f),s=JSON.stringify(b);
+ assert.ok(s.includes('36 / 38 · starting 2'));assert.ok(s.includes('Waiting for CPU headroom (resume ≤65.0%)'));
+ assert.ok(s.includes('Hunt limit reached'));assert.ok(s.includes('Admission: Unknown'));assert.ok(s.includes('50.0%'));
+ assert.ok(!s.includes('SECRET'));assert.equal(f.ramUsedMB,null);
+ assert.ok(b.embeds[0].fields.every(field=>field.value.length<=1024));
+});
+
+test('missing CPU admission is not advertised as accepting and unavailable RAM is not zero',async()=>{
+ const c=await sampleLocalCapacity('http://127.0.0.1:61001',async()=>Response.json({capacity:{running:1,pending:0,limit:10}}));
+ assert.equal(c.blocked,null);
+ const s=JSON.stringify(payload(null,Date.now(),{online:1,servers:1,rows:[{id:3,at:Date.now(),online:true,hunts:1,capacity:c,ramUsedMB:null,ramTotalMB:null}],knownHunts:1,hunts:1,meanCpu:null,ramUsedMB:null,ramTotalMB:null}));
+ assert.ok(s.includes('CPU status unknown'));assert.ok(!s.includes('0.0 GB'));assert.ok(!s.includes('Below CPU/count limits'));
 });
