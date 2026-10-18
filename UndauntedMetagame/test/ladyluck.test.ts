@@ -117,7 +117,7 @@ describe("Lady Luck Trials store", () => {
         }
 
         assert.equal(StackQuantity(A.CharacterId, "CURRENCY_MARKS_STEEL"), 0);
-        assert.equal(StackQuantity(A.CharacterId, "PART_GA_SPECIAL_SKILLSHOT"), 1);
+        assert.equal(JSON.parse(GetDb().select().from(inventory).where(eq(inventory.characterId,A.CharacterId)).get()!.instancedItems).filter((item:any)=>item.catalogId==="PART_GA_SPECIAL_SKILLSHOT").length, 1);
         assert.equal(StackQuantity(A.CharacterId, "CELL_TRIALS_01_E"), 1);
         assert.equal(GrantKind("WP_DP_EXOTIC_BOMBS"), "instanced");
         assert.throws(() => CreateStorePurchase(A.UserId, "markssteel", "ladyluck_weapon_twin_suns"), {Status: 409});
@@ -130,7 +130,7 @@ describe("Lady Luck Trials store", () => {
         Buy(A.UserId, "CURRENCY_MARKS_STEEL", "ladyluck_cb_passive_trials_02");
 
         assert.equal(StackQuantity(A.CharacterId, "CURRENCY_MARKS_STEEL"), 50);
-        assert.equal(StackQuantity(A.CharacterId, "PART_CB_PASSIVE_TRIALS_02"), 1);
+        assert.equal(JSON.parse(GetDb().select().from(inventory).where(eq(inventory.characterId,A.CharacterId)).get()!.instancedItems).filter((item:any)=>item.catalogId==="PART_CB_PASSIVE_TRIALS_02").length, 1);
         assert.equal(GetStoreOffer(A.UserId, "ladyluck_cb_passive_trials_02").remaining, 0);
     });
 
@@ -180,4 +180,24 @@ it('store images reject encoded path escapes and enforce their independent reque
         for(let i=0;i<600;i++) assert.equal((await Call('GET','/store-images/not_an_item.png')).status,404);
         assert.equal((await Call('GET','/store-images/not_an_item.png')).status,429);
     } finally { StoreImageRateLimit.resetKey('127.0.0.1'); }
+});
+
+it('grants both reported Trials unlocks as equipable instances and never stacks or duplicates them',async()=>{
+    const A=await MakePlayer();
+    Credit(A.CharacterId,'CURRENCY_MARKS_STEEL',750);
+    for(const [sku,id] of [
+      ['ladyluck_eb_special_parry','PART_EB_SPECIAL_PARRY'],
+      ['ladyluck_ms_passive_trials_02','PART_MS_PASSIVE_TRIALS_02']
+    ]){
+      assert.equal(GrantKind(id),'instanced');
+      const token=CreateStorePurchase(A.UserId,'markssteel',sku).purchaseToken;
+      RedeemStorePurchase(A.UserId,'markssteel',token);
+      RedeemStorePurchase(A.UserId,'markssteel',token);
+      const instances=ReadInstanced(A.CharacterId).filter(i=>i.catalogId===id);
+      assert.equal(instances.length,1);
+      assert.ok(instances[0].instanceId);
+      assert.equal(StackQuantity(A.CharacterId,id),0);
+      assert.equal(GetStoreOffer(A.UserId,sku).remaining,0);
+    }
+    assert.equal(StackQuantity(A.CharacterId,'CURRENCY_MARKS_STEEL'),0);
 });

@@ -7,7 +7,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { Call, StartApp, StopApp } from "./appclient";
 import { GetDb } from "../src/db";
-import { cooldowns, entitlements, leaderboardprofiles, trialruns, trialweeks } from "../src/db/schema";
+import { inventory, cooldowns, entitlements, leaderboardprofiles, trialruns, trialweeks } from "../src/db/schema";
 import { MakePlayer, StackQuantity } from "./helpers";
 import { FinalizeCompletedTrialWeeks, TrialIdForWeek, TrialRewardRank, TrialWeekAt, TrialsWindowForWeek, TRIAL_POOL, TRIAL_ROTATION_START, TrialBehemothForWeek, TRIALS_CHAMPION_ENTITLEMENT, TRIALS_CHAMPION_TITLE, TRIALS_DAUNTLESS_TITLE } from "../src/controllers/trials";
 import { GetSeasonalEventSchedule } from "../src/routes/tuning";
@@ -190,12 +190,12 @@ describe("Trials leaderboards", () => {
         const Bought = await Call("POST", `/notification/CURRENCY_MARKS_STEEL?token=${Token.json.purchaseToken}`, {as: A.UserId});
         assert.equal(Bought.status, 204);
         assert.equal(StackQuantity(A.CharacterId, "CURRENCY_MARKS_STEEL"), 50);
-        assert.equal(StackQuantity(A.CharacterId, "PART_CB_PASSIVE_TRIALS_02"), 1);
+        assert.equal(JSON.parse(GetDb().select().from(inventory).where(eq(inventory.characterId,A.CharacterId)).get()!.instancedItems).filter((item:any)=>item.catalogId==="PART_CB_PASSIVE_TRIALS_02").length, 1);
 
         // A retried result is still idempotent after the player has spent the Marks.
         assert.equal((await Call("POST", "/trials/leaderboards", {gs: true, body: Run})).status, 204);
         assert.equal(StackQuantity(A.CharacterId, "CURRENCY_MARKS_STEEL"), 50);
-        assert.equal(StackQuantity(A.CharacterId, "PART_CB_PASSIVE_TRIALS_02"), 1);
+        assert.equal(JSON.parse(GetDb().select().from(inventory).where(eq(inventory.characterId,A.CharacterId)).get()!.instancedItems).filter((item:any)=>item.catalogId==="PART_CB_PASSIVE_TRIALS_02").length, 1);
     });
 
     it("reports timing for the Trial week being queried, not always the current week", () => {
@@ -452,3 +452,4 @@ describe("Trials leaderboards", () => {
         assert.equal((await Call("POST", "/trials/leaderboards/solo", {as: A.UserId, body: Query()})).status, 404);
     });
 });
+
