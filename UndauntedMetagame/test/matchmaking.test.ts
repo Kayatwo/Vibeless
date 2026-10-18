@@ -91,10 +91,13 @@ describe("concurrent hunt queues", () => {
             await HandlePlayerMatchmaking("ISLAND", "", "Hunt_Test_A", "UID-private", true);
             await HandlePlayerMatchmaking("ISLAND", "", "Hunt_Test_A", "UID-private2", true);
             await new Promise(resolve=>setTimeout(resolve,20));
+            // The second private candidate waits for the older allocation result, then retries alone.
+            SetPartyClockForTests(() => Date.now() + 3100);
+            await CheckAndUpdateQueueStatus("UID-private2");
             assert.deepEqual(rosters, [["UID-private"], ["UID-private2"]]);
             assert.equal((await CheckAndUpdateQueueStatus("UID-public"))?.Ready, false);
             assert.equal((await CheckAndUpdateQueueStatus("UID-private"))?.Ready, true);
-        } finally { globalThis.fetch = originalFetch; ResetMatchmakingForTests(); }
+        } finally { globalThis.fetch = originalFetch; SetPartyClockForTests(); ResetMatchmakingForTests(); }
     });
     it("switching a waiting public join to private removes it from the shared roster", async () => {
         ResetMatchmakingForTests();

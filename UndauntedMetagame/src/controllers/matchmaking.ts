@@ -39,6 +39,7 @@ const CapacityOrder = new CapacityTurns(CAPACITY_WAIT_MS);
 const CAPACITY_RETRY_MS = 3 * 1000;
 
 type MatchmakingQueueData = {
+    Private?: boolean,
     Region: HuntRegion,
     HuntId: string,
     RetryAfter?: number,
@@ -212,6 +213,7 @@ function ApplyLaunchResult(playerId: string, entry: MatchmakingResult, game: Lau
 }
 
 function StoreEntry(playerId: string, entry: MatchmakingResult) {
+    entry.QueuedAt ??= PartyNow();
     const previous = MatchmakingResultMap.get(playerId);
     if (previous && previous.CandidateId !== entry.CandidateId) MatchmakingRoster.removePlayer(playerId, previous.CandidateId, 'replaced');
     MatchmakingResultMap.set(playerId, entry);
@@ -261,11 +263,13 @@ export function DistinctPlayers(PlayerIds: string[]): string[] {
 
 // Never throws: an unreachable deploy server or an unusable answer is a failed launch
 async function LaunchGameOnDeployserver(GameMode: string, GameArgs: string, HuntId: string, AskedPlayers: string[] | undefined, Region: RegionChoice = 'main'): Promise<LaunchResult> {
-    const candidate = GameMode === 'ISLAND' && AskedPlayers?.length
+    const candidate = ['ISLAND','CITY'].includes(GameMode) && AskedPlayers?.length
         ? MatchmakingResultMap.get(AskedPlayers[0])?.CandidateId : undefined;
     if (!candidate) return LaunchGameOnDeployserverNow(GameMode, GameArgs, HuntId, AskedPlayers, Region);
     const active = new Set([...MatchmakingResultMap.values()].filter(e=>!e.Ready && !e.Failed).map(e=>e.CandidateId));
-    if (!CapacityOrder.start(candidate, Region, PartyNow(), active))
+    const queuedAt = Math.min(...AskedPlayers!.map(id => MatchmakingResultMap.get(id)?.QueuedAt ?? PartyNow()));
+    // City seats and hunt processes are separate resources; a full city must not hold up hunts.
+    if (!CapacityOrder.start(candidate, `${Region}:${GameMode}`, PartyNow(), active, queuedAt))
         return {succeeded:false,readyNow:false,host:'',port:0,capacity:true};
     let capacity = false;
     try {
@@ -401,6 +405,8 @@ async function PopQueue(HuntId: string, MatchmakingQueue: MatchmakingQueueData |
         if (PartyNow() < MatchmakingQueue.CapacityDeadline && MatchmakingQueue.Players.length > 0) {
             MatchmakingQueue.Resolved = false;
             MatchmakingQueue.RetryAfter = PartyNow() + (GameOnDeployServer.retryAfterMs ?? CAPACITY_RETRY_MS);
+            // A private retry must never enter or merge with the public matchmaking pool.
+            if (MatchmakingQueue.Private) return;
             // Keep taking joiners while waiting: dropped from the map, every new player for this hunt
             // opened a queue of its own, asked for another server and made the capacity wait worse
             const QueueKey = RegionQueueKey(HuntId, MatchmakingQueue.Region);
@@ -562,6 +568,7 @@ async function QueuePlayer(HuntId: string, PlayerId: string, Private = false){
 
     if(Queue === undefined){
         Queue = {
+            Private,
             Region,
             HuntId: HuntId,
             Players: [],

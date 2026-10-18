@@ -1,0 +1,9 @@
+# Ramsgate capacity waits and hunt priority
+
+Existing direct CITY allocation already preserves MATCHING on confirmed capacity503 and renews a60-second idle lease when polled. Keep this protocol rather than holding an HTTP request open or masking ambiguous launch failures. A20-minute active-poll integration test now verifies the same candidate remains matching and later travels. Actual client loading-screen presentation still requires an in-game test.
+
+CapacityTurns now includes CITY as well as ISLAND, using separate region/world-mode lanes. Unresolved allocation attempts block newer candidates in that lane; original queue age and a sequence tie-break survive retries. Other regions and city/hunt lanes progress independently. Priority applies to candidates presented for allocation; not-yet-eligible public groups still follow existing group assembly. Serialization includes allocation response time, so throughput must be observed after deployment. It does not add physical capacity.
+
+Regression found during testing: private solo capacity retries entered the public map and merged waiting public players. Marked queue privacy explicitly and excluded private retries from public reinsertion/merge. The failing test observed private2 and public in the same allocation roster; after repair both private allocations remain single-player.
+
+Validation: TypeScript builds and69 focused matchmaking tests pass, including20-minute CITY waiting, city FIFO despite newer-first polling, independent hunt lane, cancellation, delayed allocations and roster isolation. Only matchmaking.js and capacityturns.js staged at C:/DauntlessRevived/staging/fair-queues-20261017 with actual-live before hashes and backup/restart script. Not activated yet; needs backend-only restart, potentially interrupting login/chat. Hunt processes need not restart. No new custom client queue screen has been implemented.
