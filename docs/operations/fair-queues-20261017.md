@@ -7,3 +7,7 @@ CapacityTurns now includes CITY as well as ISLAND, using separate region/world-m
 Regression found during testing: private solo capacity retries entered the public map and merged waiting public players. Marked queue privacy explicitly and excluded private retries from public reinsertion/merge. The failing test observed private2 and public in the same allocation roster; after repair both private allocations remain single-player.
 
 Validation: TypeScript builds and69 focused matchmaking tests pass, including20-minute CITY waiting, city FIFO despite newer-first polling, independent hunt lane, cancellation, delayed allocations and roster isolation. Only matchmaking.js and capacityturns.js staged at C:/DauntlessRevived/staging/fair-queues-20261017 with actual-live before hashes and backup/restart script. Not activated yet; needs backend-only restart, potentially interrupting login/chat. Hunt processes need not restart. No new custom client queue screen has been implemented.
+
+## Activated
+
+User approved immediate activation. Hash-checked script applied both modules, backup C:/DauntlessRevived/backups/fair-queues-20261018-020915. Backend-only restart recovered as PID3468 on61000; deploy PID5976 and hunt processes stayed running. Verification returned publicHTTP200, dashboard error:null, fivehosts reporting,213players and huntcounts9/32/21/34 on gamehosts. This supersedes staged-only status above. Client waiting-screen presentation and live saturated-queue fairness still require gameplay observation; automated69-test coverage remains the behavioral evidence.
