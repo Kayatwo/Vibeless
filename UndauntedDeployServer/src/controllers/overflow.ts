@@ -3,6 +3,7 @@ import { logger } from '../logger';
 
 type Request = { GameMode: string; GameArgs: string; HuntId: string; ExpectedPlayers: string[] | undefined; Overflow?: boolean };
 type Connection = { host: string; port: number };
+const capacityRetryAt = new Map<string, number>();
 
 export function OverflowUrl() {
     const value = process.env.OVERFLOW_DEPLOYSERVER_URL;
@@ -14,6 +15,11 @@ export function OverflowUrl() {
 }
 
 export async function RemoteLaunch(url: URL, body: Request): Promise<Connection | undefined> {
+    // Capacity refusals are shared by waiting parties, not by persistent-world launches.
+    const capacityKey = `${url.origin}|${body.GameMode}`;
+    const now = Date.now();
+    for (const [key, until] of capacityRetryAt) if (until <= now) capacityRetryAt.delete(key);
+    if (capacityRetryAt.has(capacityKey)) return undefined;
     // A tunnel can accept TCP while its remote target is down. Probe without side effects
     // before POST, so that failure still permits a safe local launch.
     try {
@@ -36,7 +42,13 @@ export async function RemoteLaunch(url: URL, body: Request): Promise<Connection 
         throw error;
     }
     const result = await response.json() as any;
-    if (response.status === 503 && result.error === 'capacity_unavailable') {logger.info({huntId:body.HuntId,reason:result.reason}, 'routing: worker capacity rejection'); return undefined;}
+    if (response.status === 503 && result.error === 'capacity_unavailable') {
+        const seconds = Number(response.headers.get('retry-after'));
+        const delay = Number.isFinite(seconds) && seconds > 0 ? Math.min(30, Math.max(1, seconds)) : 10;
+        capacityRetryAt.set(capacityKey, Date.now() + delay * 1000);
+        logger.info({huntId:body.HuntId,reason:result.reason}, 'routing: worker capacity rejection');
+        return undefined;
+    }
     if (!response.ok || typeof result.host !== 'string' || !Number.isInteger(result.port) || result.port < 1 || result.port > 65535)
         {logger.warn({huntId:body.HuntId,status:response.status}, 'routing: worker HTTP error'); throw new Error(`Overflow launch failed (${response.status})`);}
     logger.info({huntId:body.HuntId,host:result.host,port:result.port,selected:'worker'}, 'routing: selected');
