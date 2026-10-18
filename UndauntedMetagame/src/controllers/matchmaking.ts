@@ -246,6 +246,9 @@ function ParkCapacity(CandidateId: string, retry: () => Promise<boolean>, retryM
     }
     if (CapacityWaits.size >= 1000) return false;
     CapacityWaits.set(CandidateId, {next: PartyNow() + retryMs(), deadline: PartyNow() + CAPACITY_WAIT_MS, busy: false, retry, retryMs});
+    const member = [...MatchmakingResultMap.entries()].find(([, entry]) => entry.CandidateId === CandidateId && entry.PartyCandidate);
+    const party = member && GetPartyOf(member[0]);
+    if (party?.Candidate?.CandidateId === CandidateId) party.Candidate.CapacityDeadline = PartyNow() + CAPACITY_WAIT_MS;
     return true;
 }
 
@@ -482,6 +485,10 @@ export async function CheckAndUpdateQueueStatus(PlayerId: string){
             FailCandidate(PlayerMatchmakingResult.CandidateId, 'capacity wait expired');
         } else {
             waiting.deadline = PartyNow() + CAPACITY_WAIT_MS;
+            if (PlayerMatchmakingResult.PartyCandidate) {
+                const party = GetPartyOf(PlayerId);
+                if (party?.Candidate?.CandidateId === PlayerMatchmakingResult.CandidateId) party.Candidate.CapacityDeadline = waiting.deadline;
+            }
             if (!waiting.busy && PartyNow() >= waiting.next) {
                 waiting.busy = true;
                 waiting.next = PartyNow() + CAPACITY_RETRY_MS;
@@ -881,7 +888,10 @@ async function StartPartyCandidate(TheParty: Party, GameMode: string, HuntId: st
             const entry = MatchmakingResultMap.get(member);
             return entry?.CandidateId === CandidateId && !entry.Failed && TheParty.Members.includes(member);
         });
-        if (TheParty.Candidate?.CandidateId !== CandidateId || Active.length === 0) return true;
+        if (TheParty.Candidate?.CandidateId !== CandidateId || Active.length === 0) {
+            FailCandidate(CandidateId, 'party candidate no longer active');
+            return true;
+        }
         const deadline = PartyNow() + DeployTimeoutMs();
         TheParty.Candidate.LaunchDeadline = deadline;
         for (const member of Active) MatchmakingResultMap.get(member)!.LaunchDeadline = deadline;
