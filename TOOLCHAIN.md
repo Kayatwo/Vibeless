@@ -14,7 +14,11 @@ release; "CI" means `.github/workflows/ci.yml` on GitHub-hosted runners.
 | Generated SDK | 4,148 files from Dumper-7 plus the `Basic.hpp` assert fix | Tracked in `UndauntedInternalServer/SDK` | **Pin:** LF-normalized aggregate `6884c491043d44e810e6a2c13c2c65797b2e9be9a6d0536853bb4f8e22f4bc7e` (sorted path, NUL, lowercase file SHA-256, LF), 63,849,377 bytes normalized. BackportDev's byte pin `41cb7207…629c` is the same content with CRLF. |
 
 The DLL is not expected to be byte-identical across compilers or builds; a release records its own
-DLL hash, compiler version and source commit.
+DLL hash, compiler version and source commit. Observed 2026-10-19: commits `9dbef4c` and `ab7e25a`
+have identical native sources, yet CI produced different DLL hashes (`0ea84484…` vs `fdd54412…`)
+and proxy hashes on the same compiler, so the builds are not deterministic yet (PE timestamps and
+debug identifiers are the likely cause). **Open:** try `/Brepro` and compare two clean builds before
+claiming reproducibility.
 
 ## Backend (`UndauntedDeployServer`, `UndauntedMetagame`)
 
