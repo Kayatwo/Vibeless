@@ -38,6 +38,20 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
 6. Profile root instead of the hard-coded lab path (`ProfileRootPolicy.h`).
 7. Adjustable foundation settings (`FoundationSettings.h`).
 8. Published-source proxy loader (`VibelessProxy/`), built and tested in CI.
+9. Core-only build: MSBuild `/p:VibelessFeatures=0` compiles out every backport, Test Arena,
+   diagnostics and parked development call (the core-only 1.4.4 baseline). CI builds it and checks
+   that no feature markers remain.
+10. Foundation bundle: `tools/vibeless/make-foundation-bundle.mjs`, built by the CI job "Vibeless
+    foundation bundle" and kept as the `vibeless-foundation` artifact for 7 days.
+
+## Verification status (2026-10-19)
+
+CI on `main` passes the backend suites (deploy, metagame, gateway, content), portable and Windows
+native tests, the default and core-only DLL builds, the proxy loader test and the bundle assembly.
+The OpenBSD server-port job fails on unmodified upstream code as well and is not caused by Vibeless.
+Not yet verified: the Vibeless DLL, proxy and bundle with the real game (client start, login,
+Ramsgate, hunts, the backport features and Test Arena), clean-machine and offline installation, and
+upgrade/rollback. Those need a disposable profile and separate authorization.
 
 ## Profiles and settings
 
