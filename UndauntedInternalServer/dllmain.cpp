@@ -46,8 +46,16 @@
 
 using namespace SDK;
 
-#include "DojoProbe.h"
 #include "DevelopmentAccessPolicy.h"
+#include "ProfileRoot.h"
+
+// VIBELESS_FEATURES=0 builds the core-only 1.4.4 baseline: no backport creatures, Test Arena,
+// diagnostics probes or parked development code (Phase 0 audit, section 10).
+#ifndef VIBELESS_FEATURES
+#define VIBELESS_FEATURES 1
+#endif
+#if VIBELESS_FEATURES
+#include "DojoProbe.h"
 #include "PortProbe.h"
 #include "FrostEncounter.h"
 #include "FrostReturn.h"
@@ -62,6 +70,7 @@ using namespace SDK;
 #include "OriginalStrength.h"
 #include "HuntPresentation.h"
 #include "TestArenaMenu.h"
+#endif
 
 static bool IsRunningUnderWine() {
     HMODULE Ntdll = GetModuleHandleW(L"ntdll.dll");
@@ -421,11 +430,13 @@ FString* GetGameDefaultMap(FString* a1) {
 
     // The isolated development slot uses an explicit arena selection, without
     // inheriting the stock Training Grounds hunt rules from its entry route.
+#if VIBELESS_FEATURES
     if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766 && DojoProbe::IsExpectedProcess()) {
         const std::wstring arenaURL = DojoProbe::ConfiguredMapURL();
         *Ret = arenaURL.c_str();
         return Ret;
     }
+#endif
 
     const std::wstring FinalURL = DevelopmentAccessPolicy::StockMapURL(
         Globals::MapPath, Globals::BehemothPath, Globals::MatchmakerHuntId, Globals::ExpectedPlayerString);
@@ -450,14 +461,14 @@ const wchar_t* GetCommandLineHook() {
         if (!Original) return Original;
         // The client builds its own engine command line, dropping the OS UserDir.
         // Inside a profile, keep its authentication arguments and add the profile's UserDir.
-        static const std::wstring ClientUserDir = ProfileRootPolicy::UserDir(DojoProbe::Root(), false, 0);
+        static const std::wstring ClientUserDir = ProfileRootPolicy::UserDir(ProfileRoot::Root(), false, 0);
         if (ClientUserDir.empty()) return Original;
         static const std::wstring IsolatedClientCommandLine = std::wstring(Original) + L" -UserDir=" + ClientUserDir;
         return IsolatedClientCommandLine.c_str();
     }
     // Inside a profile, keep every server's UE settings and logs there.
     // The original replacement command line discards -UserDir.
-    static const std::wstring ServerUserDir = ProfileRootPolicy::UserDir(DojoProbe::Root(), true, Globals::Port);
+    static const std::wstring ServerUserDir = ProfileRootPolicy::UserDir(ProfileRoot::Root(), true, Globals::Port);
     if (ServerUserDir.empty()) return ServerCommandLine;
     static const std::wstring IsolatedCommandLine = std::wstring(ServerCommandLine) + L" -UserDir=" + ServerUserDir;
     return IsolatedCommandLine.c_str();
@@ -490,6 +501,7 @@ extern "C" {
 }
 
 void* OrigGameEngineTick = nullptr;
+#if VIBELESS_FEATURES
 void* OrigFrostClientEngineTick = nullptr;
 void FrostClientEngineTickHook(UGameEngine* engine, float deltaTime, char canRender) {
     FrostReturn::Tick(UWorld::GetWorld());
@@ -502,6 +514,7 @@ void FrostClientEngineTickHook(UGameEngine* engine, float deltaTime, char canRen
     TestArenaMenu::Tick(UWorld::GetWorld());
     HuntPresentation::Tick(UWorld::GetWorld());
 }
+#endif
 
 void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender) {
     // Network tick settings do not cap this injected per-frame replication loop.
@@ -539,6 +552,7 @@ void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender
         DR_TickStage = 2;
         const auto ReplicationStart = std::chrono::steady_clock::now();
         Networking::TickNetworking();
+#if VIBELESS_FEATURES
         OriginalStrength::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
         // Networking restores this injected world's driver after the engine tick.
         if (DevelopmentAccessPolicy::Enabled)
@@ -554,6 +568,7 @@ void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender
             DraskProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
             EquipmentProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
         }
+#endif
         DR_ReplicationMicros += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - ReplicationStart).count();
         DR_TickStage = 3;
     }
@@ -861,10 +876,14 @@ static bool IsPotionPurchaseQuestOpen() {
 }
 
 void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
+#if VIBELESS_FEATURES
     if (TestArenaMenu::BeforeEvent(Object, Function, Parms)) return;
+#endif
     RamsStorePilot::Scope RamsScope(Object, Function, Parms);
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEventClient)(Object, Function, Parms);
+#if VIBELESS_FEATURES
     HuntPresentation::AfterEvent(Object, Function, Parms);
+#endif
 
     TrialsSchedule::Tick();
     CellFusionTime::Tick();
@@ -896,17 +915,19 @@ bool DidDoTravelReset = false;
 void* OrigProcessEvent = nullptr;
 
 void ProcessEventHook(UObject* Object, UFunction* Function, void* Parms) {
+    const char* eventLabel = nullptr;
+#if VIBELESS_FEATURES
     if (TestArena::BeforeServerEvent(Object, Function, Parms, Networking::NetDriver)) return;
     // Store class/function names before dispatch; the crash handler must not walk UE objects.
     // No arguments, character names or account identifiers are retained.
     static thread_local std::map<std::pair<UClass*, UFunction*>, std::string> EventLabels;
-    const char* eventLabel = nullptr;
     if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766 && Object && Object->Class && Function) {
         auto [label, inserted] = EventLabels.try_emplace({Object->Class, Function});
         if (inserted) label->second = "context=" + DojoProbe::ObjectPath(Object->Class)
             + " function=" + Function->GetFullName();
         eventLabel = label->second.c_str();
     }
+#endif
     DR_EventScope eventScope(eventLabel);
     // This hook is installed only in game servers. Never inspect RPC arguments
     // or infer bans from timing, movement corrections, or server-side calls.
@@ -946,11 +967,15 @@ void ProcessEventHook(UObject* Object, UFunction* Function, void* Parms) {
         return;
     }
 
+#if VIBELESS_FEATURES
     FrostRewardProbe::ObserveProcessEvent(Object, Function, Parms, false);
     DraskRewardProbe::ObserveProcessEvent(Object, Function, Parms, false);
+#endif
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEvent)(Object, Function, Parms);
+#if VIBELESS_FEATURES
     FrostRewardProbe::ObserveProcessEvent(Object, Function, Parms, true);
     DraskRewardProbe::ObserveProcessEvent(Object, Function, Parms, true);
+#endif
 }
 
 void* OrigConfigCacheIniGetString = nullptr;
@@ -1030,10 +1055,12 @@ void EACClientInitHook(void* a1) {
 
 void InitClientHooks() {
     MH_Initialize();
+#if VIBELESS_FEATURES
     FrostReturn::Install(Globals::BaseAddress);
     if (DojoProbe::IsExpectedProcess() && MH_CreateHook((void*)(Globals::BaseAddress + 0x3307100),
         FrostClientEngineTickHook, &OrigFrostClientEngineTick) == MH_OK)
         MH_EnableHook((void*)(Globals::BaseAddress + 0x3307100));
+#endif
     MH_CreateHook((void*)(Globals::BaseAddress + 0x1D06D40), GetCommandLineHook, &OrigGetCommandLine);
     MH_EnableHook((void*)(Globals::BaseAddress + 0x1D06D40));
     RamsStorePilot::Install(Globals::BaseAddress);
@@ -1097,7 +1124,9 @@ int NetModeHook(void* a1) { //char __fastcall UArchonStaminaComponent_TryConsume
 
 void InitServerHooks() {
     MH_Initialize();
+#if VIBELESS_FEATURES
     FrostRewardProbe::Install();
+#endif
     Networking::InitChannelTracking(Globals::BaseAddress);
 
     // SYSTEM and service accounts do not inherit a launcher-generated Game.ini.

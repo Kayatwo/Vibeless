@@ -329,6 +329,22 @@ jobs:
           & $script
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build the core-only 1.4.4 baseline DLL (VibelessFeatures=0)
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw 'MSBuild not found' }
+          $out = Join-Path $env:RUNNER_TEMP 'core-only'
+          & $msbuild UndauntedInternalServer\UndauntedInternalServer.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:VibelessFeatures=0 "/p:OutDir=$out\" "/p:IntDir=$out\obj\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $dll = Join-Path $out 'UndauntedInternalServer.dll'
+          $bytes = [IO.File]::ReadAllBytes($dll)
+          $text = [Text.Encoding]::Unicode.GetString($bytes) + [Text.Encoding]::ASCII.GetString($bytes)
+          foreach ($marker in 'TestArena144', 'Frost144_MatchmakerHunt', 'Thunderdeep144_MatchmakerHunt', 'frost-encounter.jsonl', 'drask-rewards.jsonl') {
+            if ($text.Contains($marker)) { throw "Core-only DLL still contains feature marker $marker" }
+          }
+          Write-Output "Core-only DLL SHA256: $((Get-FileHash -Algorithm SHA256 -LiteralPath $dll).Hash.ToLowerInvariant())"
+
       - name: Test Vibeless SDK-dependent native regressions
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"

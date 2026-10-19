@@ -16,25 +16,12 @@
 #include "SDK/bp_gamemode_behemoth_spawner_component_classes.hpp"
 #include "SDK/BP_PatrolCenterPoint_classes.hpp"
 #include "SDK/NavigationSystem_classes.hpp"
-#include "ProfileRootPolicy.h"
+#include "ProfileRoot.h"
 
 namespace DojoProbe {
 using namespace SDK;
-// Profile root of this game process, or empty outside a Vibeless profile (see ProfileRootPolicy.h).
-inline const std::wstring& Root() {
-    static const std::wstring root = [] {
-        wchar_t exe[32768]{};
-        if (!GetModuleFileNameW(nullptr, exe, 32768)) return std::wstring{};
-        wchar_t env[32768]{};
-        const DWORD length = GetEnvironmentVariableW(L"DR_PROFILE_ROOT", env, 32768);
-        const std::wstring_view envRoot(env, length < 32768 ? length : 0);
-        return ProfileRootPolicy::Resolve(exe, envRoot, [](const std::wstring& marker) {
-            std::error_code error;
-            return std::filesystem::is_regular_file(std::filesystem::path(marker), error);
-        });
-    }();
-    return root;
-}
+// Profile root of this game process, or empty outside a Vibeless profile (see ProfileRoot.h).
+inline const std::wstring& Root() { return ProfileRoot::Root(); }
 inline constexpr char DefaultMonster[] = "/Game/Monsters/mcrollin/mcbeaver_normal_bp.mcbeaver_normal_bp_C";
 inline ULONGLONG NextPoll = 0, NextSample = 0;
 inline std::set<std::string> ConsumedRequests;
