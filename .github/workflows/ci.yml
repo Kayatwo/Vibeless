@@ -391,6 +391,65 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  foundation-bundle:
+    name: Vibeless foundation bundle (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Build the runtime DLL and the candidate proxy loader
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          $vs = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
+          if (-not $msbuild -or -not $vs) { throw 'Visual Studio toolchain not found' }
+          & $msbuild UndauntedInternalServer\UndauntedInternalServer.sln /m /t:Build /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $proxy = Join-Path $env:RUNNER_TEMP 'vibeless-proxy'
+          cmd /d /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && call VibelessProxy\build.cmd `"$proxy`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $cl = cmd /d /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && cl 2>&1" | Select-Object -First 1
+          "MSVC_VERSION=$cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build the backend services
+        run: |
+          foreach ($package in 'UndauntedDeployServer', 'UndauntedMetagame') {
+            Push-Location $package
+            npm ci --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            npm run build
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Pop-Location
+          }
+
+      - name: Assemble the bundle
+        run: |
+          $dll = Get-ChildItem -Path UndauntedInternalServer -Filter UndauntedInternalServer.dll -Recurse |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]Release[\\/]' } | Select-Object -First 1
+          if (-not $dll) { throw 'Release x64 DLL not found' }
+          $out = Join-Path $env:RUNNER_TEMP 'vibeless-foundation'
+          node tools/vibeless/make-foundation-bundle.mjs --out $out --dll $dll.FullName --proxy "$env:RUNNER_TEMP\vibeless-proxy\proxy\dxgi.dll" --msvc "$env:MSVC_VERSION"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content (Join-Path $out 'foundation-manifest.json') -TotalCount 30
+
+      - name: Keep the bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vibeless-foundation
+          path: ${{ runner.temp }}/vibeless-foundation
+          if-no-files-found: error
+          retention-days: 7
+
   server-kit:
     name: Server kit (Windows PowerShell 5.1)
     runs-on: windows-latest
