@@ -1,6 +1,7 @@
 // Identity of the dedicated 1.4.4 Frost Gnasher pursuit. AGPL-3.0-only.
 #pragma once
 #include "DojoProbe.h"
+#include "HuntPortPolicy.h"
 
 namespace FrostHuntConfig {
 using namespace SDK;
@@ -16,7 +17,7 @@ inline bool IsDedicatedWorld(UWorld* world) {
         && static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString() == MatchmakerHuntId;
 }
 inline bool IsDedicatedServer(UWorld* world, int port) {
-    return port >= 8760 && port <= 8765 && IsDedicatedWorld(world)
+    return HuntPortPolicy::IsHunt(port) && IsDedicatedWorld(world)
         && world->AuthorityGameMode && world->AuthorityGameMode->HasAuthority();
 }
 }

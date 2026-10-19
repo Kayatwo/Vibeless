@@ -45,7 +45,7 @@ inline bool AllowedWorld(UWorld* world, UNetDriver* driver, int port) {
         || !world->AuthorityGameMode->HasAuthority() || !world->AuthorityGameMode->Class
         || world->AuthorityGameMode->Class->GetName() != "BPGM_Archon_Prototype_C") return false;
     return FrostHuntConfig::IsDedicatedServer(world, port)
-        || (port == 8766 && DojoProbe::FrostHuntEnabled()
+        || (port == HuntPortPolicy::TrainingGrounds() && DojoProbe::FrostHuntEnabled()
             && (world->GetName() == "arena_ramsgate_00" || world->GetName() == "dia_moss_triforce"));
 }
 inline FName* NameMember(UObject* object, const char* name, int& offset) {

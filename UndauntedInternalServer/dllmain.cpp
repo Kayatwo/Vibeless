@@ -48,6 +48,7 @@ using namespace SDK;
 
 #include "DevelopmentAccessPolicy.h"
 #include "ProfileRoot.h"
+#include "HuntPortPolicy.h"
 
 // VIBELESS_FEATURES=0 builds the core-only 1.4.4 baseline: no backport creatures, Test Arena,
 // diagnostics probes or parked development code (Phase 0 audit, section 10).
@@ -1335,6 +1336,7 @@ void Init() {
         if (NumArgs > 8) {
             Globals::ServerAPIKey = Args[1];
             Globals::Port = std::stoi(std::wstring(Args[2]));
+            HuntPortPolicy::LoadFromEnvironment();
             if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766) EnableWatchdog = false;
             Globals::MapPath = Args[3];
             Globals::BehemothPath = Args[4];

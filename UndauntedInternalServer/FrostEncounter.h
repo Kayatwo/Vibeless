@@ -76,7 +76,7 @@ inline void SpawnDiagnostics(UWorld* world, AArchonBehemoth* behemoth, const std
 // Call after a manual spawn, or let TickServer discover the normal hunt's spawn.
 // Only missing stock registrations are repaired; existing death/reward bindings are left alone.
 inline bool RegisterSpawn(UWorld* world, AArchonBehemoth* behemoth, int port) {
-    if ((port != 8766 && !FrostHuntConfig::IsDedicatedServer(world, port)) || !DojoProbe::IsExpectedProcess() || !world || !world->NetDriver || world->NetDriver->ServerConnection
+    if ((port != HuntPortPolicy::TrainingGrounds() && !FrostHuntConfig::IsDedicatedServer(world, port)) || !DojoProbe::IsExpectedProcess() || !world || !world->NetDriver || world->NetDriver->ServerConnection
         || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority() || !IsFrost(behemoth)
         || !behemoth->HasAuthority() || !behemoth->Controller || behemoth->GetCurrentHealth() <= 0) return false;
     auto* mode = IslandMode(world);
@@ -117,7 +117,7 @@ inline bool RegisterSpawn(UWorld* world, AArchonBehemoth* behemoth, int port) {
     return modeAfter && stateAfter;
 }
 inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
-    if ((port != 8766 && !FrostHuntConfig::IsDedicatedServer(world, port)) || !DojoProbe::IsExpectedProcess() || !world || !driver || world->NetDriver != driver || driver->ServerConnection
+    if ((port != HuntPortPolicy::TrainingGrounds() && !FrostHuntConfig::IsDedicatedServer(world, port)) || !DojoProbe::IsExpectedProcess() || !world || !driver || world->NetDriver != driver || driver->ServerConnection
         || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority() || GetTickCount64() < NextServerPoll) return;
     NextServerPoll = GetTickCount64() + 1000;
     if (ServerWorld != world) {

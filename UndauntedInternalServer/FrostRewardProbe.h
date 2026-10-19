@@ -199,7 +199,7 @@ inline void Reset(UWorld* world, int port) {
 inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
     if (!Enabled()) return;
     if (!world || !driver || driver->World != world || world->NetDriver != driver || driver->ServerConnection
-        || port < 8760 || port > 8766 || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority()) {
+        || !(HuntPortPolicy::IsHunt(port) || port == HuntPortPolicy::TrainingGrounds()) || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority()) {
         if (ActiveWorld) Reset(nullptr, 0);
         return;
     }

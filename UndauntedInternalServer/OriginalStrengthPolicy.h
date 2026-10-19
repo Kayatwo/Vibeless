@@ -4,6 +4,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include "HuntPortPolicy.h"
 
 namespace OriginalStrengthPolicy {
 struct Stats { float Power, Resistance; };
@@ -13,7 +14,7 @@ inline std::optional<Stats> Authored(std::string_view hunt) {
     return {};
 }
 inline std::optional<Stats> Expected(int port, std::string_view hunt, std::string_view actorClass) {
-    if (port < 8760 || port > 8765) return {};
+    if (!HuntPortPolicy::IsHunt(port)) return {};
     if (hunt == "Frost144_MatchmakerHunt_Gnasher"
         && actorClass == "/Game/Monsters/frost144/mcbeaver_frost_bp.mcbeaver_frost_bp_C") return Authored(hunt);
     if (hunt == "Thunderdeep144_MatchmakerHunt_Drask"

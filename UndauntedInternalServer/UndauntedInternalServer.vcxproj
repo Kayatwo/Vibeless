@@ -146,6 +146,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="constants.h" />
+    <ClInclude Include="HuntPortPolicy.h" />
     <ClInclude Include="HuntWorld.h" />
     <ClInclude Include="FoundationSettings.h" />
     <ClInclude Include="ProfileRootPolicy.h" />
