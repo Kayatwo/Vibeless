@@ -58,11 +58,11 @@ inline std::string ObjectPath(UObject* object) {
     return package->Name.GetRawString() + "." + object->GetName();
 }
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(Root) / L"reports/dojo-probe.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(Root()) / L"reports/dojo-probe.jsonl", std::ios::app);
     out << "{\"uptimeMs\":" << GetTickCount64() << "," << body << "}\n";
 }
 inline void AtomicJson(const wchar_t* name, const std::string& body) {
-    const auto destination = std::filesystem::path(Root) / L"reports" / name;
+    const auto destination = std::filesystem::path(Root()) / L"reports" / name;
     const auto temporary = std::filesystem::path(destination.wstring() + L".tmp");
     { std::ofstream out(temporary); out << body << '\n'; }
     MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING);
@@ -79,7 +79,7 @@ inline void Result(const SpawnRequest& request, const std::string& status, const
     Log("\"event\":\"request_result\",\"requestId\":" + Json(request.Id) + ",\"status\":" + Json(status) + ",\"reason\":" + Json(reason));
     // The local control service queues only while this path is absent.
     std::error_code ec;
-    std::filesystem::remove(std::filesystem::path(Root) / L"data/spawn.request", ec);
+    std::filesystem::remove(std::filesystem::path(Root()) / L"data/spawn.request", ec);
     NextSample = 0;
 }
 inline std::string Trim(const std::string& value) {
@@ -92,7 +92,7 @@ inline const ArenaConfiguration& ConfiguredArena() {
     static const ArenaConfiguration configured = [] {
         std::string map = "/Game/Maps/islands/1705/dia_moss_triforce", mode = "hunt";
         std::string playerId;
-        std::ifstream input(std::filesystem::path(Root) / L"data/dev-map.ini", std::ios::binary);
+        std::ifstream input(std::filesystem::path(Root()) / L"data/dev-map.ini", std::ios::binary);
         std::string line;
         while (std::getline(input, line)) {
             const auto equals = line.find('=');
@@ -165,7 +165,7 @@ inline DraskPracticeConfiguration ParseDraskPracticeMarker(const std::string& te
     return config;
 }
 inline DraskPracticeConfiguration ReadDraskPracticeMarker() {
-    const auto path = std::filesystem::path(Root) / L"data/drask-practice.ini";
+    const auto path = std::filesystem::path(Root()) / L"data/drask-practice.ini";
     std::error_code ec;
     const auto size = std::filesystem::file_size(path, ec);
     if (ec) return {false, 100.0f, "marker_missing_or_unreadable"};
@@ -247,7 +247,7 @@ inline bool ValidId(const std::string& value) {
     });
 }
 inline bool ReadRequest(SpawnRequest& request, std::string& error) {
-    const auto file = std::filesystem::path(Root) / L"data/spawn.request";
+    const auto file = std::filesystem::path(Root()) / L"data/spawn.request";
     std::error_code ec;
     if (!std::filesystem::exists(file, ec)) return false;
     if (std::filesystem::file_size(file, ec) > 4096 || ec) { error = "request_file_too_large_or_unreadable"; return false; }
