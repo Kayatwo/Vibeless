@@ -493,6 +493,8 @@ jobs:
         with:
           name: vibeless-foundation
           path: ${{ runner.temp }}/vibeless-foundation
+          # The manifest covers every file, including dot-files such as node_modules/.package-lock.json.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
 

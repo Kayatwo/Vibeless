@@ -59,6 +59,8 @@ for (const [source, target, extra] of [
     if (!fs.existsSync(path.join(root, source, "dist", "server.js"))) throw new Error(`${source} is not built (npm run build)`);
     for (const item of ["dist", "package.json", "package-lock.json", ...extra]) copy(path.join(source, item), path.join(target, item));
     run("npm", ["ci", "--omit=dev", "--no-audit", "--no-fund"], path.join(out, target));
+    // Command shims are for npm scripts, not for running the service, and differ per platform.
+    fs.rmSync(path.join(out, target, "node_modules", ".bin"), { recursive: true, force: true });
 }
 if (!fs.existsSync(path.join(out, "metagame", "dist", "build-info.json"))) throw new Error("metagame build-info.json missing");
 
