@@ -48,8 +48,9 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
 
 CI on `main` passes the backend suites (deploy, metagame, gateway, content), portable and Windows
 native tests, the default and core-only DLL builds, the proxy loader test and the bundle assembly;
-the full run on `101e7e1` succeeded. The OpenBSD server-port job is intermittent (it failed on
-earlier runs of both upstream and Vibeless and passed on this one).
+the full run on `101e7e1` succeeded. The OpenBSD server-port job is intermittent on upstream and
+Vibeless alike (its VM wrapper reports "ssh exited with code 1"); Vibeless does not ship the OpenBSD
+port, so the job is marked `continue-on-error` and no longer decides the run.
 Not yet verified: the Vibeless DLL, proxy and bundle with the real game (client start, login,
 Ramsgate, hunts, the backport features and Test Arena), clean-machine and offline installation, and
 upgrade/rollback. Those need a disposable profile and separate authorization.

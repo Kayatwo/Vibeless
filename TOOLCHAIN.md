@@ -7,7 +7,7 @@ release; "CI" means `.github/workflows/ci.yml` on GitHub-hosted runners.
 
 | Input | Lab (installed release) | CI | Status |
 | --- | --- | --- | --- |
-| Compiler | MSVC 14.39.33519, VS2022 Community | Latest VS2022 MSVC on `windows-latest`, toolset v143 | Not pinned in CI; release builds must record the exact `cl` version and Windows SDK. |
+| Compiler | MSVC 14.39.33519, VS2022 Community | `windows-latest` image: `cl` 19.51.36260 (MSVC 14.51), toolset v143 (recorded 2026-10-19) | Hosted runners cannot pin MSVC. Every bundle records its `cl` version in `foundation-manifest.json` and a CI annotation; the lab's 14.39 build is not byte-comparable. |
 | Windows SDK | 10.0.22621.0 | Runner default (`WindowsTargetPlatformVersion` 10.0) | Same as above. |
 | Language | `stdcpplatest` (project); tests `/std:c++20` | Same project; tests `/std:c++20` (g++ for portable tests) | Pinned by source. |
 | MinHook | Vendored, BSD-2-Clause (2009-2017) | Same files | Pinned by source. |
@@ -23,7 +23,7 @@ DLL hash, compiler version and source commit.
 | Lockfiles | `package-lock.json` v3 in each package | Pinned. |
 | TypeScript | 6.0.3 (lockfile) | Pinned; the reconciliation gate used this version. |
 | Key runtime packages | express 5.2.1, drizzle-orm 0.45.2, better-sqlite3 12.11.1 (native addon), pino 10.3.1, jsonwebtoken 9.0.3; metagame also ws 8.22.0, ltx 3.1.2, express-rate-limit 8.7.0 | Pinned by lockfile. |
-| Node.js | CI: major 24 via `actions/setup-node`. Lab: system Node, version not yet recorded; its service runner needs Node 20.12 or later. | **Open:** record the lab version and pin an exact Node release for foundation bundles. |
+| Node.js | **Bundles: exactly 24.21.0** (`/.node-version`, used by the bundle job; npm 11.19.0 as shipped with it). Other CI jobs: major 24. Lab: system Node, version not recorded; its service runner needs Node 20.12 or later. | Pinned for bundles. Profiles should run the bundle with the same Node release. |
 | Files read at runtime from the metagame's working directory | `src/drizzle` migrations, `store-images/`, `package.json` (version), `.env` | Present in this repository; the foundation bundle must carry them (BackportDev currently reads them from an external lab folder). |
 
 ## Content build (BackportDev, not this repository)
