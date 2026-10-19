@@ -16,9 +16,12 @@ release; "CI" means `.github/workflows/ci.yml` on GitHub-hosted runners.
 The DLL is not expected to be byte-identical across compilers or builds; a release records its own
 DLL hash, compiler version and source commit. Observed 2026-10-19: commits `9dbef4c` and `ab7e25a`
 have identical native sources, yet CI produced different DLL hashes (`0ea84484…` vs `fdd54412…`)
-and proxy hashes on the same compiler, so the builds are not deterministic yet (PE timestamps and
-debug identifiers are the likely cause). **Open:** try `/Brepro` and compare two clean builds before
-claiming reproducibility.
+and proxy hashes on the same compiler. Since `f5a079a` the Release x64 build uses `/Brepro` and
+`/PDBALTPATH:%_PDB%`: two clean builds in the Server DLL job and the independent build in the bundle
+job (another runner) all gave `f89cb8ba861ccf1c4e127e6224fa93f31c3d8572ff6b589aca1c4608dd18ae40`.
+CI now fails if two clean builds differ. This holds for the same compiler version; a different
+MSVC still produces a different DLL. The proxy also builds with `/Brepro`; its cross-job hash is
+not compared yet.
 
 ## Backend (`UndauntedDeployServer`, `UndauntedMetagame`)
 
