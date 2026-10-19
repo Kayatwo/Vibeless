@@ -51,9 +51,11 @@ native tests, the default and core-only DLL builds, the proxy loader test and th
 the full run on `101e7e1` succeeded. The OpenBSD server-port job is intermittent on upstream and
 Vibeless alike (its VM wrapper reports "ssh exited with code 1"); Vibeless does not ship the OpenBSD
 port, so the job is marked `continue-on-error` and no longer decides the run.
-Not yet verified: the Vibeless DLL, proxy and bundle with the real game (client start, login,
-Ramsgate, hunts, the backport features and Test Arena), clean-machine and offline installation, and
-upgrade/rollback. Those need a disposable profile and separate authorization.
+First real-game test (2026-10-20, bundle `0.1.0+f9f1ecbe6bb2`, upstream proxy, fresh accounts): the
+features runtime ran the tutorial, Ramsgate, the original Training Grounds, a pursuit hunt and the Test
+Arena; the core-only runtime ran the tutorial, Ramsgate and Training Grounds; service logs were clean.
+Not yet verified: backport pursuits on a progressed account, restart persistence, the Vibeless proxy
+loader in game, clean-machine and offline installation, and upgrade/rollback.
 
 ## Profiles and settings
 
