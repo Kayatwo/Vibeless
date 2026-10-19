@@ -352,6 +352,26 @@ jobs:
           & $script
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build and test the Vibeless proxy loader (dxgi.dll)
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
+          if (-not $vs) { throw 'Visual C++ toolchain not found' }
+          $out = Join-Path $env:RUNNER_TEMP 'vibeless-proxy'
+          cmd /d /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && call VibelessProxy\build.cmd `"$out`""
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath "$out\proxy\dxgi.dll").Hash.ToLowerInvariant()
+          Write-Output "Vibeless dxgi.dll SHA256: $hash"
+          Copy-Item -LiteralPath "$out\proxy\dxgi.dll" -Destination "$env:RUNNER_TEMP\vibeless-dxgi.dll"
+
+      - name: Keep candidate proxy loader
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vibeless-dxgi
+          path: ${{ runner.temp }}/vibeless-dxgi.dll
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Verify DLL output
         run: |
           $dll = Get-ChildItem -Path UndauntedInternalServer -Filter UndauntedInternalServer.dll -Recurse |
