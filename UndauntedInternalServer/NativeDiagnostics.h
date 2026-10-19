@@ -2,11 +2,23 @@
 #include <Windows.h>
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 
-// Bounded, address-only diagnostics: never serialize commands, credentials or player data.
+// Bounded crash diagnostics: never serialize commands, credentials or player data.
 inline volatile LONG DR_TickStage = 0;
 inline wchar_t DR_DiagnosticPath[MAX_PATH] = {};
 inline volatile LONG DR_DiagnosticWrites = 0;
+inline thread_local unsigned DR_EventDepth = 0;
+inline thread_local char DR_EventFrames[24][768] = {};
+struct DR_EventScope {
+    bool Enabled = false;
+    explicit DR_EventScope(const char* label) : Enabled(label != nullptr) {
+        if (!Enabled) return;
+        if (DR_EventDepth < 24) strncpy_s(DR_EventFrames[DR_EventDepth], label, _TRUNCATE);
+        ++DR_EventDepth;
+    }
+    ~DR_EventScope() { if (Enabled && DR_EventDepth) --DR_EventDepth; }
+};
 inline void DR_WriteDiagnostic(const char* line, DWORD length) {
     if (!DR_DiagnosticPath[0]) return;
     HANDLE file = CreateFileW(DR_DiagnosticPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -29,6 +41,10 @@ inline LONG CALLBACK DR_RecordException(EXCEPTION_POINTERS* info) {
         code, address, name, static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(address) - reinterpret_cast<uintptr_t>(module)),
         DR_TickStage, GetCurrentThreadId(), GetTickCount64());
     if (size > 0) DR_WriteDiagnostic(line, static_cast<DWORD>(size));
+    for (unsigned depth = 0; depth < DR_EventDepth && depth < 24; ++depth) {
+        size = sprintf_s(line, "script_frame depth=%u %s\n", depth, DR_EventFrames[depth]);
+        if (size > 0) DR_WriteDiagnostic(line, static_cast<DWORD>(size));
+    }
     return EXCEPTION_CONTINUE_SEARCH;
 }
 inline void DR_InitDiagnostics() {

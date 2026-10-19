@@ -12,6 +12,12 @@
 #include <stdexcept>
 #include <iostream>
 #include <optional>
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <memory>
+#include <type_traits>
+#include <utility>
 #include "UtfN.hpp"
 
 namespace UC
@@ -374,8 +380,11 @@ namespace UC
 		}
 
 		TArray(int32 Size)
-			: Data(static_cast<ArrayElementType*>(FMemory::Malloc(Size* ElementSize, ElementAlign))), NumElements(0), MaxElements(Size)
+			: TArray()
 		{
+			if (Size < 0) throw std::length_error("Negative TArray capacity");
+			if (Size) Data = Allocate(Size);
+			MaxElements = Size;
 		}
 
 		TArray(const TArray& Other)
@@ -433,40 +442,81 @@ namespace UC
 		inline       ArrayElementType& GetUnsafe(int32 Index) { return Data[Index]; }
 		inline const ArrayElementType& GetUnsafe(int32 Index) const { return Data[Index]; }
 
+		static ArrayElementType* Allocate(int32 Count)
+		{
+			auto* Result = static_cast<ArrayElementType*>(FMemory::Malloc(static_cast<uint64>(Count) * ElementSize, ElementAlign));
+			if (!Result) throw std::bad_alloc();
+			return Result;
+		}
+
 	public:
 		inline void Reserve(int32 Count)
 		{
-			if (GetSlack() < Count)
-				MaxElements += Count;
-
-			Data = static_cast<ArrayElementType*>(FMemory::Realloc(Data, MaxElements * ElementSize, ElementAlign));
+			// This SDK API requests spare slots, rather than a total capacity.
+			if (Count < 0) throw std::length_error("Negative TArray reserve");
+			if (GetSlack() >= Count) return;
+			if (Count > (std::numeric_limits<int32>::max)() - MaxElements)
+				throw std::length_error("TArray capacity overflow");
+			const int32 NewMax = MaxElements + Count;
+			if constexpr (std::is_trivially_copyable_v<ArrayElementType>)
+			{
+				auto* NewData = static_cast<ArrayElementType*>(FMemory::Realloc(Data, static_cast<uint64>(NewMax) * ElementSize, ElementAlign));
+				if (!NewData) throw std::bad_alloc();
+				Data = NewData;
+			}
+			else
+			{
+				auto* NewData = Allocate(NewMax);
+				int32 Constructed = 0;
+				try
+				{
+					for (; Constructed < NumElements; ++Constructed)
+						std::construct_at(NewData + Constructed, std::move_if_noexcept(Data[Constructed]));
+				}
+				catch (...)
+				{
+					std::destroy_n(NewData, Constructed);
+					FMemory::Free(NewData);
+					throw;
+				}
+				if (Data) { std::destroy_n(Data, NumElements); FMemory::Free(Data); }
+				Data = NewData;
+			}
+			MaxElements = NewMax;
 		}
 
 		inline void Add(const ArrayElementType& Element)
 		{
 			if (GetSlack() <= 0)
+			{
+				// Element may refer to this array and must survive relocation.
+				ArrayElementType Saved(Element);
 				Reserve(3);
-
-			Data[NumElements] = Element;
+				std::construct_at(Data + NumElements, std::move_if_noexcept(Saved));
+			}
+			else std::construct_at(Data + NumElements, Element);
 			NumElements++;
 		}
 
 		inline void CopyFrom(const TArray& Other)
 		{
-			if (this == &Other || Other.NumElements == 0)
+			if (this == &Other)
 				return;
-
-			NumElements = Other.NumElements;
-
-			if (MaxElements >= Other.NumElements)
+			if (Other.NumElements == 0) { Clear(); return; }
+			if constexpr (std::is_trivially_copyable_v<ArrayElementType>)
 			{
-				memcpy(Data, Other.Data, Other.NumElements);
-				return;
+				if (MaxElements < Other.NumElements) Reserve(Other.NumElements - NumElements);
+				memcpy(Data, Other.Data, static_cast<uint64>(Other.NumElements) * ElementSize);
+				NumElements = Other.NumElements;
 			}
-
-			Data = static_cast<ArrayElementType*>(FMemory::Realloc(Data, Other.NumElements * ElementSize, ElementAlign));
-			MaxElements = Other.NumElements;
-			memcpy(Data, Other.Data, Other.NumElements * ElementSize);
+			else
+			{
+				// Deep-copy owning elements. Commit only after all copies succeed.
+				TArray Copy((std::max)(MaxElements, Other.NumElements));
+				for (; Copy.NumElements < Other.NumElements; ++Copy.NumElements)
+					std::construct_at(Copy.Data + Copy.NumElements, Other.Data[Copy.NumElements]);
+				*this = std::move(Copy);
+			}
 		}
 
 		inline void Remove(int32 Index)
@@ -474,28 +524,25 @@ namespace UC
 			if (!IsValidIndex(Index))
 				return;
 
-			NumElements--;
-
-			for (int i = Index; i < NumElements; i++)
+			for (int32 i = Index; i + 1 < NumElements; ++i)
 			{
-				/* NumElements was decremented, acessing i + 1 is safe */
-				Data[i] = Data[i + 1];
+				Data[i] = std::move_if_noexcept(Data[i + 1]);
 			}
+			std::destroy_at(Data + --NumElements);
 		}
 
 		inline void Clear()
 		{
+			if (Data) std::destroy_n(Data, NumElements);
 			NumElements = 0;
-
-			if (Data)
-				memset(Data, 0, NumElements * ElementSize);
 		}
 
 		inline void Free() noexcept
 		{
+			Clear();
 			if (Data)
 				FMemory::Free(Data);
-
+			Data = nullptr;
 			NumElements = 0x0;
 			MaxElements = 0x0;
 		}
