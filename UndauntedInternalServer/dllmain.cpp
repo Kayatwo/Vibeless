@@ -868,8 +868,8 @@ void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
 
     TrialsSchedule::Tick();
     CellFusionTime::Tick();
-    AutoPressStart::OnProcessEvent(Object, Function);
-    DualSenseIcons::OnProcessEvent();
+    if (FoundationSettings::AutoPressStart()) AutoPressStart::OnProcessEvent(Object, Function);
+    if (FoundationSettings::DualSense()) DualSenseIcons::OnProcessEvent();
     NoPlatinumPrice::OnProcessEvent(Object);
     DeveloperStyle::OnProcessEvent(Object, Function);
 
@@ -1038,8 +1038,10 @@ void InitClientHooks() {
     MH_EnableHook((void*)(Globals::BaseAddress + 0x1D06D40));
     RamsStorePilot::Install(Globals::BaseAddress);
 
-    DualSense::Install();
-    DualSenseIcons::Install(Globals::BaseAddress);
+    if (FoundationSettings::DualSense()) {
+        DualSense::Install();
+        DualSenseIcons::Install(Globals::BaseAddress);
+    }
 
 #if DR_SKIP_EAC_CLIENT_INIT
     MH_CreateHook((void*)(Globals::BaseAddress + 0xEF2440), EACClientInitHook, &OrigEACClientInit);

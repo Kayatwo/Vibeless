@@ -5,16 +5,17 @@
 #include <iostream>
 
 #include "DataTables.h"
+#include "FoundationSettings.h"
 #include "NativeDiagnostics.h"
 #include "SDK.hpp"
 
 // Middleman cell fusion time. The cooked Gameplay/cell_exchange_table gives each fusion recipe its
 // TimeRequired (1.4.4: Uncommon->Rare 22 h, Rare->Epic 46 h, Epic->Epic 70 h). Set every recipe to
 // FusionHours in memory, in the client (what the Middleman screen shows) and the game servers (what a
-// started fusion's end time is built from).
+// started fusion's end time is built from). Vibeless: the hours come from DR_CELL_FUSION_HOURS
+// (FoundationSettings.h); "retail" leaves the cooked times untouched.
 namespace CellFusionTime {
 
-constexpr int64_t FusionHours = 1;
 constexpr int64_t TicksPerHour = 36000000000LL; // FTimespan ticks are 100 ns
 
 inline SDK::UDataTable* Table = nullptr;
@@ -28,6 +29,7 @@ inline int64_t& Ticks(SDK::FTimespan& Time) {
 // True when every recipe already has the wanted time.
 inline bool Patch(SDK::UDataTable* DataTable) {
     auto& Map = DataTable->RowMap;
+    const int64_t FusionHours = FoundationSettings::FusionHours();
     int Rows = 0, Changed = 0;
 
     for (int I = 0; I < Map.NumAllocated(); ++I) {
@@ -54,6 +56,8 @@ inline bool Patch(SDK::UDataTable* DataTable) {
 
 // Call from a game-thread tick; looks for the table every 2 s until found, then re-checks every 30 s.
 inline void Tick() {
+    if (FoundationSettings::FusionHours() == FoundationSettings::RetailFusionHours)
+        return;
     const auto Now = std::chrono::steady_clock::now();
     if (Now < NextCheck)
         return;
