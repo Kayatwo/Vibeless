@@ -114,7 +114,8 @@
     "ShatteredIsles_PublicEventsTestMap1": "Public Events Test Map 1",
     "ShatteredIsles_PublicEventsTestMap2": "Public Events Test Map 2",
     "ShatteredIsles_ReturnToRamsgate": "Ramsgate",
-    "ShatteredIsles_TrainingDojo": "Training Grounds"
+    "ShatteredIsles_TrainingDojo": "Training Grounds",
+    "Thunderdeep144_PlayerHunt_Pursuit_Drask": "Thunderdeep Drask"
   },
   "matchmakerHunts": {
     "CR19_MatchmakerHunt_Beaver": "Gnasher",
@@ -169,7 +170,8 @@
     "CR19_MatchmakerHunt_Shockmane_Heroic": "Heroic Tempestborne Stormclaw",
     "CR19_MatchmakerHunt_Snowflake_Alpha": "Winterhorn Skraev",
     "CR19_MatchmakerHunt_Snowflake_Heroic": "Heroic Winterhorn Skraev",
-    "CR19_MatchmakerHunt_Snowflake_New": "Skraev"
+    "CR19_MatchmakerHunt_Snowflake_New": "Skraev",
+    "Thunderdeep144_MatchmakerHunt_Drask": "Thunderdeep Drask"
   },
   "behemoths": {
     "bugbear_normal_bp": "Rezakiri",
@@ -212,6 +214,7 @@
     "sq_sally_alpha_bp": "Firebrand Charrogg",
     "sq_sally_normal_bp": "Charrogg",
     "sq_salt_normal_bp": "Valomyr",
-    "sq_salt_normal_heroic_bp": "Heroic Valomyr"
+    "sq_salt_normal_heroic_bp": "Heroic Valomyr",
+    "fulgar_alpha_bp": "Thunderdeep Drask"
   }
 }

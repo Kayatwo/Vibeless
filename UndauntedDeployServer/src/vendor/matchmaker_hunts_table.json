@@ -25340,6 +25340,297 @@
           },
           "RowName": "SNOWBALL_FIGHT_TEST"
         }
+      },
+      "Frost144_MatchmakerHunt_Gnasher": {
+        "Region": {
+          "DataTable": {
+            "ObjectName": "DataTable'hunt_regions'",
+            "ObjectPath": "Archon/Content/Gameplay/hunts/hunt_regions.0"
+          },
+          "RowName": "ZONE_01"
+        },
+        "HuntTags": [],
+        "HuntThreatLevel": 3,
+        "GameModeOverride": "",
+        "SpecificBehemoth": {
+          "BehemothName": "beaver_frost",
+          "BehemothAsset": {
+            "AssetPathName": "/Game/Monsters/frost144/mcbeaver_frost_bp.mcbeaver_frost_bp_C",
+            "SubPathString": ""
+          },
+          "PowerOverride": 100,
+          "Weighting": 0
+        },
+        "AdditionalBehemoths": [],
+        "AdditionalSpecificBehemoths": [],
+        "MapMetaData": {
+          "DataTable": {
+            "ObjectName": "DataTable'map_metadata_table'",
+            "ObjectPath": "Archon/Content/Gameplay/hunts/map_metadata_table.0"
+          },
+          "RowName": "Campaign_Island_02"
+        },
+        "MapList": [
+          {
+            "MapName": "bellajensnow",
+            "MapAssetName": "/Game/Maps/islands/1609/bella_jen_snow.bella_jen_snow",
+            "Biome": "EHuntBiome::Ice",
+            "Weighting": 20,
+            "AtmosphereList": {
+              "ObjectName": "Hunt_AtmosphereList'atmos_snow_light_00'",
+              "ObjectPath": "Archon/Content/Gameplay/hunts/atmosphere_lists/atmos_snow_light_00.0"
+            },
+            "SpecificAtmosphere": {
+              "AtmosphereName": "",
+              "AtmosphereAsset": {
+                "AssetPathName": "None",
+                "SubPathString": ""
+              },
+              "Weighting": 1
+            },
+            "GatherableDistributions": [
+              {
+                "GatherableDataRow": {
+                  "DataTable": {
+                    "ObjectName": "DataTable'gatherable_distribution_table'",
+                    "ObjectPath": "Archon/Content/Gameplay/hunts/gatherable_distribution_table.0"
+                  },
+                  "RowName": "GD_CAMPAIGN_ISLAND_SNOW"
+                },
+                "Weight": 1
+              }
+            ]
+          }
+        ],
+        "SpecificModifier": null,
+        "Modifiers": [],
+        "GatherableTier": "EGatherableTier::Tier0",
+        "MaxPlayers": 4,
+        "Unlock": {
+          "Quests": [],
+          "QuestRequirementCondition": "EQuestRequirementCondition::AllRequired",
+          "ItemID": "TOKEN_KILL_COUNT_BEAVER_NORMAL",
+          "ItemQuantity": 1,
+          "HideItemID": "None",
+          "RequiredRanks": [],
+          "MinimumUnlocked": 0,
+          "MaximumUnlocked": 0,
+          "FeatureFlag": null,
+          "EventID": "None",
+          "PlayerJourneyMapNodes": []
+        },
+        "AltUnlock": {
+          "Quests": [],
+          "QuestRequirementCondition": "EQuestRequirementCondition::AllRequired",
+          "ItemID": "None",
+          "ItemQuantity": 1,
+          "HideItemID": "None",
+          "RequiredRanks": [],
+          "MinimumUnlocked": 0,
+          "MaximumUnlocked": 0,
+          "FeatureFlag": null,
+          "EventID": "None",
+          "PlayerJourneyMapNodes": []
+        },
+        "bIsGeneratedEncounter": false,
+        "GameModeSpecificData": {
+          "DataTable": null,
+          "RowName": "None"
+        }
+      },
+      "Thunderdeep144_MatchmakerHunt_Drask": {
+        "Region": {
+          "DataTable": {
+            "ObjectName": "DataTable'hunt_regions'",
+            "ObjectPath": "Archon/Content/Gameplay/hunts/hunt_regions.0"
+          },
+          "RowName": "ZONE_01"
+        },
+        "HuntTags": [],
+        "HuntThreatLevel": 3,
+        "GameModeOverride": "",
+        "SpecificBehemoth": {
+          "BehemothName": "fulgar_alpha",
+          "BehemothAsset": {
+            "AssetPathName": "/Game/Monsters/drask144/fulgar_alpha_bp.fulgar_alpha_bp_C",
+            "SubPathString": ""
+          },
+          "PowerOverride": 50,
+          "Weighting": 0
+        },
+        "AdditionalBehemoths": [],
+        "AdditionalSpecificBehemoths": [],
+        "MapMetaData": {
+          "DataTable": {
+            "ObjectName": "DataTable'map_metadata_table'",
+            "ObjectPath": "Archon/Content/Gameplay/hunts/map_metadata_table.0"
+          },
+          "RowName": "Campaign_Island_01"
+        },
+        "MapList": [
+          {
+            "MapName": "frida_moss_falls",
+            "MapAssetName": "/Game/Maps/islands/1803/frida_moss_falls.frida_moss_falls",
+            "Biome": "EHuntBiome::Moss",
+            "Weighting": 25,
+            "AtmosphereList": {
+              "ObjectName": "Hunt_AtmosphereList'atmos_moss_all_00'",
+              "ObjectPath": "Archon/Content/Gameplay/hunts/atmosphere_lists/atmos_moss_all_00.0"
+            },
+            "SpecificAtmosphere": {
+              "AtmosphereName": "",
+              "AtmosphereAsset": {
+                "AssetPathName": "None",
+                "SubPathString": ""
+              },
+              "Weighting": 1
+            },
+            "GatherableDistributions": [
+              {
+                "GatherableDataRow": {
+                  "DataTable": {
+                    "ObjectName": "DataTable'gatherable_distribution_table'",
+                    "ObjectPath": "Archon/Content/Gameplay/hunts/gatherable_distribution_table.0"
+                  },
+                  "RowName": "GD_CAMPAIGN_ISLAND_MOSS"
+                },
+                "Weight": 1
+              }
+            ]
+          }
+        ],
+        "SpecificModifier": null,
+        "Modifiers": [],
+        "GatherableTier": "EGatherableTier::Tier0",
+        "MaxPlayers": 4,
+        "Unlock": {
+          "Quests": [],
+          "QuestRequirementCondition": "EQuestRequirementCondition::AllRequired",
+          "ItemID": "TOKEN_KILL_COUNT_BEAVER_NORMAL",
+          "ItemQuantity": 1,
+          "HideItemID": "None",
+          "RequiredRanks": [],
+          "MinimumUnlocked": 0,
+          "MaximumUnlocked": 0,
+          "FeatureFlag": null,
+          "EventID": "None",
+          "PlayerJourneyMapNodes": []
+        },
+        "AltUnlock": {
+          "Quests": [],
+          "QuestRequirementCondition": "EQuestRequirementCondition::AllRequired",
+          "ItemID": "TOKEN_KILL_COUNT_BEAVER_NORMAL",
+          "ItemQuantity": 1,
+          "HideItemID": "None",
+          "RequiredRanks": [],
+          "MinimumUnlocked": 0,
+          "MaximumUnlocked": 0,
+          "FeatureFlag": null,
+          "EventID": "None",
+          "PlayerJourneyMapNodes": []
+        },
+        "bIsGeneratedEncounter": false,
+        "GameModeSpecificData": {
+          "DataTable": null,
+          "RowName": "None"
+        }
+      },
+      "TestArena144_MatchmakerHunt": {
+        "Region": {
+          "DataTable": {
+            "ObjectName": "DataTable'hunt_regions'",
+            "ObjectPath": "Archon/Content/Gameplay/hunts/hunt_regions.0"
+          },
+          "RowName": "ZONE_01"
+        },
+        "HuntTags": [],
+        "HuntThreatLevel": 0,
+        "GameModeOverride": "/Game/Blueprints/BPGM_Archon_Prototype.BPGM_Archon_Prototype_C",
+        "SpecificBehemoth": {
+          "BehemothName": "beaver_normal",
+          "BehemothAsset": {
+            "AssetPathName": "/Game/Monsters/mcrollin/mcbeaver_normal_bp.mcbeaver_normal_bp_C",
+            "SubPathString": ""
+          },
+          "PowerOverride": 100,
+          "Weighting": 0
+        },
+        "AdditionalBehemoths": [],
+        "AdditionalSpecificBehemoths": [],
+        "MapMetaData": {
+          "DataTable": {
+            "ObjectName": "DataTable'map_metadata_table'",
+            "ObjectPath": "Archon/Content/Gameplay/hunts/map_metadata_table.0"
+          },
+          "RowName": "Campaign_Island_02"
+        },
+        "MapList": [
+          {
+            "MapName": "poodle",
+            "MapAssetName": "/Game/Maps/islands/arenas/arena_ramsgate_00.arena_ramsgate_00",
+            "Biome": "EHuntBiome::Moss",
+            "Weighting": 20,
+            "AtmosphereList": {
+              "ObjectName": "Hunt_AtmosphereList'atmos_moss_all_00'",
+              "ObjectPath": "Archon/Content/Gameplay/hunts/atmosphere_lists/atmos_moss_all_00.0"
+            },
+            "SpecificAtmosphere": {
+              "AtmosphereName": "",
+              "AtmosphereAsset": {
+                "AssetPathName": "None",
+                "SubPathString": ""
+              },
+              "Weighting": 1
+            },
+            "GatherableDistributions": [
+              {
+                "GatherableDataRow": {
+                  "DataTable": {
+                    "ObjectName": "DataTable'gatherable_distribution_table'",
+                    "ObjectPath": "Archon/Content/Gameplay/hunts/gatherable_distribution_table.0"
+                  },
+                  "RowName": "GD_CAMPAIGN_ISLAND_MOSS"
+                },
+                "Weight": 1
+              }
+            ]
+          }
+        ],
+        "SpecificModifier": null,
+        "Modifiers": [],
+        "GatherableTier": "EGatherableTier::Tier0",
+        "MaxPlayers": 1,
+        "Unlock": {
+          "Quests": [],
+          "QuestRequirementCondition": "EQuestRequirementCondition::AllRequired",
+          "ItemID": "None",
+          "ItemQuantity": 1,
+          "HideItemID": "None",
+          "RequiredRanks": [],
+          "MinimumUnlocked": 0,
+          "MaximumUnlocked": 0,
+          "FeatureFlag": null,
+          "EventID": "None",
+          "PlayerJourneyMapNodes": []
+        },
+        "AltUnlock": {
+          "Quests": [],
+          "QuestRequirementCondition": "EQuestRequirementCondition::AllRequired",
+          "ItemID": "None",
+          "ItemQuantity": 1,
+          "HideItemID": "None",
+          "RequiredRanks": [],
+          "MinimumUnlocked": 0,
+          "MaximumUnlocked": 0,
+          "FeatureFlag": null,
+          "EventID": "None",
+          "PlayerJourneyMapNodes": []
+        },
+        "bIsGeneratedEncounter": false,
+        "GameModeSpecificData": {
+          "DataTable": null,
+          "RowName": "None"
+        }
       }
     }
   }
