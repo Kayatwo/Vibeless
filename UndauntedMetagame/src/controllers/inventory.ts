@@ -152,7 +152,9 @@ export function ParseStackQuantity(Item: any, Operation: string){
 // the captures show what the game server removes, an overspend is clamped as it
 // always was and logged ("Allowing overspend") so it can be judged.
 export function IsOverspendRefused(){
-    return process.env.INVENTORY_REFUSE_OVERSPEND === "1";
+    // Isolated development economy: crafting/upgrades must consume materials
+    // actually held. Native reward grants still share one atomic transaction.
+    return true;
 }
 
 // Daily token stacks the game server grants, raised to our own daily amount: the grant is
@@ -577,7 +579,7 @@ function ApplyPreparedInventoryTransaction(tx: Tx, Prepared: PreparedInventoryTr
         )).get();
 
         if(SameIdOtherBody != undefined){
-            logger.warn(`transactionId ${DedupeKey} for userId ${UserId} and characterId ${CharacterId} was seen before with a different body; running it as a new transaction`);
+            throw new InventoryConflictError("A completed inventory transaction ID cannot authorize a different reward or crafting request");
         }
     }
 
