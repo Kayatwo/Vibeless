@@ -133,11 +133,15 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <!-- Vibeless: deterministic output (no timestamps) for reproducible release builds. -->
+      <AdditionalOptions>/Brepro %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <!-- Vibeless: deterministic link; record only the PDB file name, not the build path. -->
+      <AdditionalOptions>/Brepro /PDBALTPATH:%_PDB% %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

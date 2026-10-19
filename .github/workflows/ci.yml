@@ -332,6 +332,22 @@ jobs:
           & $script
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Check that a second clean build gives the same DLL
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw 'MSBuild not found' }
+          $first = Get-ChildItem -Path UndauntedInternalServer -Filter UndauntedInternalServer.dll -Recurse |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]Release[\\/]' } | Select-Object -First 1
+          if (-not $first) { throw 'Release x64 DLL not found' }
+          $out = Join-Path $env:RUNNER_TEMP 'repro'
+          & $msbuild UndauntedInternalServer\UndauntedInternalServer.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 "/p:OutDir=$out\" "/p:IntDir=$out\obj\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $a = (Get-FileHash -Algorithm SHA256 -LiteralPath $first.FullName).Hash.ToLowerInvariant()
+          $b = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out 'UndauntedInternalServer.dll')).Hash.ToLowerInvariant()
+          Write-Output "::notice title=Vibeless reproducibility::first=$a second=$b identical=$($a -eq $b)"
+          if ($a -ne $b) { throw "Two clean builds differ: $a vs $b" }
+
       - name: Build the core-only 1.4.4 baseline DLL (VibelessFeatures=0)
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
