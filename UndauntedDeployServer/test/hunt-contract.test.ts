@@ -21,13 +21,22 @@ test('every enabled catalog hunt supplies a map, matchmaker hunt and the complet
         if (!ids.length || ids.some((id: string) => !(id in MatchmakerTable[0].Rows))) continue;
         ResetGameserversForTests();
         await Startup();
-        await StartupGameserverWithHuntIdAndPlayers(hunt, ['UID-a', 'UID-b']);
+        // Vibeless: the Test Arena is a private one-player session.
+        const players = hunt === 'TestArena144_PlayerHunt' ? ['UID-a'] : ['UID-a', 'UID-b'];
+        await StartupGameserverWithHuntIdAndPlayers(hunt, players);
         assert.match(args[2], /^\/Game\//, hunt);
         assert.ok(args[4] && args[4] !== 'NO_MM_HUNTID', hunt);
-        assert.equal(args[5], `UID-a:${hunt},UID-b:${hunt}`, hunt);
+        assert.equal(args[5], players.map(player => `${player}:${hunt}`).join(','), hunt);
         checked++;
     }
     assert.ok(checked > 100, `only ${checked} catalog hunts checked`);
+});
+
+test('the Test Arena refuses a session for more than one player', async () => {
+    ResetGameserversForTests();
+    await Startup();
+    await assert.rejects(StartupGameserverWithHuntIdAndPlayers('TestArena144_PlayerHunt', ['UID-a', 'UID-b']),
+        /one player per private session/);
 });
 
 test('concurrent Training requests share a world with catalog rules and no fixed player roster', async () => {
