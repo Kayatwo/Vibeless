@@ -457,6 +457,13 @@ jobs:
           node tools/vibeless/make-foundation-bundle.mjs --out $out --dll $dll.FullName --proxy "$env:RUNNER_TEMP\vibeless-proxy\proxy\dxgi.dll" --msvc "$env:MSVC_VERSION"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Content (Join-Path $out 'foundation-manifest.json') -TotalCount 30
+          $manifest = Get-Content (Join-Path $out 'foundation-manifest.json') -Raw | ConvertFrom-Json
+          $dllHash = $manifest.files.'native/UndauntedInternalServer.dll'
+          $proxyHash = $manifest.files.'native/candidate-proxy/dxgi.dll'
+          $manifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out 'foundation-manifest.json')).Hash.ToLowerInvariant()
+          # Annotations are readable through the API even where job logs are not.
+          Write-Output "::notice title=Vibeless toolchain::node=$($manifest.toolchain.node) npm=$($manifest.toolchain.npm) msvc=$($manifest.toolchain.msvc)"
+          Write-Output "::notice title=Vibeless bundle::version=$($manifest.version) files=$(@($manifest.files.PSObject.Properties).Count) manifest=$manifestHash dll=$dllHash proxy=$proxyHash"
 
       - name: Keep the bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
