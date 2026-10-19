@@ -454,6 +454,9 @@ jobs:
           $proxy = Join-Path $env:RUNNER_TEMP 'vibeless-proxy'
           cmd /d /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && call VibelessProxy\build.cmd `"$proxy`""
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $core = Join-Path $env:RUNNER_TEMP 'core-only'
+          & $msbuild UndauntedInternalServer\UndauntedInternalServer.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /p:VibelessFeatures=0 "/p:OutDir=$core\" "/p:IntDir=$core\obj\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $cl = cmd /d /c "call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && cl 2>&1" | Select-Object -First 1
           "MSVC_VERSION=$cl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -474,7 +477,7 @@ jobs:
             Where-Object { $_.FullName -match '[\\/]x64[\\/]Release[\\/]' } | Select-Object -First 1
           if (-not $dll) { throw 'Release x64 DLL not found' }
           $out = Join-Path $env:RUNNER_TEMP 'vibeless-foundation'
-          node tools/vibeless/make-foundation-bundle.mjs --out $out --dll $dll.FullName --proxy "$env:RUNNER_TEMP\vibeless-proxy\proxy\dxgi.dll" --msvc "$env:MSVC_VERSION"
+          node tools/vibeless/make-foundation-bundle.mjs --out $out --dll $dll.FullName --proxy "$env:RUNNER_TEMP\vibeless-proxy\proxy\dxgi.dll" --core-dll "$env:RUNNER_TEMP\core-only\UndauntedInternalServer.dll" --node (Get-Command node).Source --msvc "$env:MSVC_VERSION"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Content (Join-Path $out 'foundation-manifest.json') -TotalCount 30
           $manifest = Get-Content (Join-Path $out 'foundation-manifest.json') -Raw | ConvertFrom-Json

@@ -5,7 +5,8 @@
 //   - optionally VibelessProxy/build.cmd (candidate proxy loader)
 //
 //   node tools/vibeless/make-foundation-bundle.mjs --out <empty folder> --dll <UndauntedInternalServer.dll>
-//        [--proxy <Vibeless dxgi.dll>] [--msvc "<cl version>"]
+//        [--proxy <Vibeless dxgi.dll>] [--core-dll <core-only UndauntedInternalServer.dll>]
+//        [--node <node.exe to ship as runtime/node.exe>] [--msvc "<cl version>"]
 //
 // The bundle never contains game files, credentials, databases or a filled-in .env.
 import { createHash } from "node:crypto";
@@ -45,6 +46,10 @@ if (args.proxy) {
     fs.mkdirSync(path.join(out, "native", "candidate-proxy"), { recursive: true });
     fs.copyFileSync(path.resolve(args.proxy), path.join(out, "native", "candidate-proxy", "dxgi.dll"));
 }
+if (args["core-dll"]) {
+    fs.mkdirSync(path.join(out, "native", "core-only"), { recursive: true });
+    fs.copyFileSync(path.resolve(args["core-dll"]), path.join(out, "native", "core-only", "UndauntedInternalServer.dll"));
+}
 
 // Backend services: compiled output plus production dependencies from the lockfile
 for (const [source, target, extra] of [
@@ -78,6 +83,18 @@ fs.mkdirSync(path.join(out, "licenses"), { recursive: true });
 for (const file of ["LICENSE.txt", "NOTICE.md", "VIBELESS.md", "TOOLCHAIN.md"]) copy(file, path.join("licenses", file));
 const minhook = fs.readFileSync(path.join(root, "UndauntedInternalServer", "MinHook", "MinHook.h"), "utf8");
 fs.writeFileSync(path.join(out, "licenses", "MinHook-LICENSE.txt"), minhook.slice(0, minhook.indexOf("*/") + 2) + "\n");
+// Node runtime, so a profile does not depend on the machine's Node (better-sqlite3 is built for it)
+if (args.node) {
+    const nodeExe = path.resolve(args.node);
+    const nodeVersion = execFileSync(nodeExe, ["--version"], { encoding: "utf8" }).trim();
+    const pinned = "v" + fs.readFileSync(path.join(root, ".node-version"), "utf8").trim();
+    if (nodeVersion !== pinned) throw new Error(`Node ${nodeVersion} is not the pinned ${pinned}`);
+    fs.mkdirSync(path.join(out, "runtime"), { recursive: true });
+    fs.copyFileSync(nodeExe, path.join(out, "runtime", path.basename(nodeExe)));
+    const nodeLicense = path.join(path.dirname(nodeExe), "LICENSE");
+    if (fs.existsSync(nodeLicense)) fs.copyFileSync(nodeLicense, path.join(out, "licenses", "Node.js-LICENSE.txt"));
+}
+
 fs.mkdirSync(path.join(out, "source"), { recursive: true });
 const archive = path.join(out, "source", `vibeless-${commit}.tar.gz`);
 run("git", ["archive", "--format=tar.gz", `--prefix=vibeless-${commit}/`, "-o", archive, "HEAD"]);
@@ -103,6 +120,8 @@ const manifest = {
     toolchain: { node: process.version, npm: run("npm", ["--version"]), msvc: args.msvc ?? "unrecorded" },
     game: { client: "Dauntless 1.4.4 (CL 239827)", exeSha256: GAME_EXE_SHA256, supplied: "by the user; never bundled" },
     proxyLoader: { installed: "native/dxgi.dll", origin: "upstream prebuilt, source unpublished", candidate: args.proxy ? "native/candidate-proxy/dxgi.dll" : null },
+    runtimes: { features: "native/UndauntedInternalServer.dll", coreOnly: args["core-dll"] ? "native/core-only/UndauntedInternalServer.dll" : null },
+    node: args.node ? { path: "runtime/node.exe", version: execFileSync(path.resolve(args.node), ["--version"], { encoding: "utf8" }).trim() } : null,
     files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)))
 };
 fs.writeFileSync(path.join(out, "foundation-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
