@@ -1,2 +1,9 @@
+# Vibeless (Phase 0 decision D3): store text files with LF line endings so
+# upstream changes apply cleanly; Windows working trees may still use CRLF.
+# Source inventories hash LF-normalized text; binaries keep byte hashes.
+* text=auto
+# Third-party files kept byte-for-byte as upstream imported them.
+client-mods/ue4ss/** -text
+
 UndauntedMetagame/src/vendor/progression_config.json linguist-generated=true
 UndauntedContent/data/*.json linguist-generated=true text eol=lf
