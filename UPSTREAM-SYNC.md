@@ -16,7 +16,7 @@ Upstream: `https://github.com/mixutin/dauntless-revived`, branch `dauntless-revi
 | `87bc989` | Party capacity lease expiry and orphaned queue deadlocks | **Adopted.** Party matchmaking fix. |
 | `98be0bc` | Grant Trials weapon parts as instanced items | **Adopted.** The client requires instanced parts; economy-neutral. |
 | `055702e` | OpenBSD CI loopback peer | **Adopted.** CI only; likely cause of the intermittent OpenBSD job. |
-| `cf1b8cc`, `528af31`, `d9e99bd`, `67b2179` | Native hunt idle grace 120 s; deploy reaps empty, silent and over-age hunts (hard 2 h ceiling) | **Deferred.** Useful against leaked processes, but the ceiling would end long Test Arena or solo sessions and the shorter native grace affects slow first loads. Revisit with a profile setting and a real-game test. |
+| `cf1b8cc`, `528af31`, `d9e99bd`, `67b2179` | Native hunt idle grace 120 s; deploy reaps empty, silent and over-age hunts (hard 2 h ceiling) | **Deferred to Phase 2** (decided 2026-10-20). Vibeless already retires hunts after two minutes of confirmed vacancy (inherited from `c39bcfa`). The additions target fleet-scale leaks; the hard age ceiling would end long Test Arena or solo sessions, and the shorter native grace affects slow first loads. Revisit as a per-profile setting with a real-game test. |
 | `d955566` | Align shop rotation with the Middleman weekly reset | **Deferred.** Store behaviour; optional. |
 | `a481193` | Halve Rams cosmetic prices | **Excluded.** Economy change. |
 | `18d6ce0`, `bd9c74a` | Auto-suspend accounts using a known unlocker tool; its test | **Excluded.** Public-server moderation; not needed for a private profile. |
