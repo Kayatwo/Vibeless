@@ -46,6 +46,23 @@
 
 using namespace SDK;
 
+#include "DojoProbe.h"
+#include "DevelopmentAccessPolicy.h"
+#include "PortProbe.h"
+#include "FrostEncounter.h"
+#include "FrostReturn.h"
+#include "FrostRewardProbe.h"
+#include "FrostHunt.h"
+#include "FrostLootCompat.h"
+#include "DraskProbe.h"
+#include "EquipmentProbe.h"
+#include "DraskIcon.h"
+#include "ThunderdeepHunt.h"
+#include "DraskRewardProbe.h"
+#include "OriginalStrength.h"
+#include "HuntPresentation.h"
+#include "TestArenaMenu.h"
+
 static bool IsRunningUnderWine() {
     HMODULE Ntdll = GetModuleHandleW(L"ntdll.dll");
     return Ntdll != nullptr && GetProcAddress(Ntdll, "wine_get_version") != nullptr;
@@ -402,29 +419,16 @@ void* OrigGetDefaultMap = nullptr;
 FString* GetGameDefaultMap(FString* a1) {
     FString* Ret = reinterpret_cast<FString*(*)(FString*)>(OrigGetDefaultMap)(a1);
 
-    std::wstring FinalURL(Globals::MapPath);
-
-    std::wstring BehemothPath(Globals::BehemothPath);
-
-    if (!BehemothPath.contains(L"NO_BEHEMOTH")) {
-        FinalURL += std::wstring(L"?MonsterClass=");
-        FinalURL += std::wstring(BehemothPath);
+    // The isolated development slot uses an explicit arena selection, without
+    // inheriting the stock Training Grounds hunt rules from its entry route.
+    if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766 && DojoProbe::IsExpectedProcess()) {
+        const std::wstring arenaURL = DojoProbe::ConfiguredMapURL();
+        *Ret = arenaURL.c_str();
+        return Ret;
     }
 
-    std::wstring MatchmakerHuntId(Globals::MatchmakerHuntId);
-
-    if (!MatchmakerHuntId.contains(L"NO_MM_HUNTID")) {
-        FinalURL += std::wstring(L"?HuntId=");
-        FinalURL += std::wstring(MatchmakerHuntId);
-    }
-
-    std::wstring ExpectedPlayers(Globals::ExpectedPlayerString);
-
-    if (!ExpectedPlayers.contains(L"NO_EXPECTED_PLAYERS")) {
-        FinalURL += std::wstring(L"?PlayerHuntIds=");
-        FinalURL += std::wstring(ExpectedPlayers);
-    }
-
+    const std::wstring FinalURL = DevelopmentAccessPolicy::StockMapURL(
+        Globals::MapPath, Globals::BehemothPath, Globals::MatchmakerHuntId, Globals::ExpectedPlayerString);
     *Ret = FinalURL.c_str();
 
     //*Ret = L"ramsgate_01_persistent?game=/Game/Blueprints/BPGM_Archon_Prototype.BPGM_Archon_Prototype_C?MonsterClass=/Game/Monsters/mcrollin/mcbeaver_tutorial_bp.mcbeaver_tutorial_bp_C";
@@ -441,7 +445,21 @@ FString* GetGameDefaultMap(FString* a1) {
 void* OrigGetCommandLine = nullptr;
 
 const wchar_t* GetCommandLineHook() {
-    return ServerCommandLine;
+    if (!Globals::AmServer) {
+        const auto Original = reinterpret_cast<const wchar_t*(*)()>(OrigGetCommandLine)();
+        if (!Original) return Original;
+        // The client builds its own engine command line, dropping the OS UserDir.
+        // Keep its authentication arguments intact and carry the isolated path.
+        static const std::wstring IsolatedClientCommandLine = std::wstring(Original)
+            + L" -UserDir=C:/Dauntless/Experiments/Dojo144/user/client/";
+        return IsolatedClientCommandLine.c_str();
+    }
+    // Local 1.4.4 setup: keep every server's UE settings and logs in this
+    // experiment. The original replacement command line discards -UserDir.
+    static const std::wstring IsolatedCommandLine = std::wstring(ServerCommandLine)
+        + L" -UserDir=C:/Dauntless/Experiments/Dojo144/user/server-"
+        + std::to_wstring(Globals::Port) + L"/";
+    return IsolatedCommandLine.c_str();
 }
 
 void* OrigServerBootCrash = nullptr;
@@ -471,6 +489,18 @@ extern "C" {
 }
 
 void* OrigGameEngineTick = nullptr;
+void* OrigFrostClientEngineTick = nullptr;
+void FrostClientEngineTickHook(UGameEngine* engine, float deltaTime, char canRender) {
+    FrostReturn::Tick(UWorld::GetWorld());
+    reinterpret_cast<void(*)(UGameEngine*, float, char)>(OrigFrostClientEngineTick)(engine, deltaTime, canRender);
+    FrostReturn::Tick(UWorld::GetWorld());
+    FrostEncounter::TickClient(UWorld::GetWorld());
+    DraskIcon::Tick(UWorld::GetWorld());
+    FrostHunt::Tick(UWorld::GetWorld());
+    ThunderdeepHunt::Tick(UWorld::GetWorld());
+    TestArenaMenu::Tick(UWorld::GetWorld());
+    HuntPresentation::Tick(UWorld::GetWorld());
+}
 
 void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender) {
     // Network tick settings do not cap this injected per-frame replication loop.
@@ -508,6 +538,21 @@ void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender
         DR_TickStage = 2;
         const auto ReplicationStart = std::chrono::steady_clock::now();
         Networking::TickNetworking();
+        OriginalStrength::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        // Networking restores this injected world's driver after the engine tick.
+        if (DevelopmentAccessPolicy::Enabled)
+            DojoProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        FrostEncounter::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        FrostLootCompat::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        FrostRewardProbe::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        DraskRewardProbe::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        FrostHunt::Tick(UWorld::GetWorld());
+        ThunderdeepHunt::Tick(UWorld::GetWorld());
+        if (DevelopmentAccessPolicy::Enabled) {
+            PortProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+            DraskProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+            EquipmentProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
+        }
         DR_ReplicationMicros += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - ReplicationStart).count();
         DR_TickStage = 3;
     }
@@ -815,8 +860,10 @@ static bool IsPotionPurchaseQuestOpen() {
 }
 
 void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
+    if (TestArenaMenu::BeforeEvent(Object, Function, Parms)) return;
     RamsStorePilot::Scope RamsScope(Object, Function, Parms);
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEventClient)(Object, Function, Parms);
+    HuntPresentation::AfterEvent(Object, Function, Parms);
 
     TrialsSchedule::Tick();
     CellFusionTime::Tick();
@@ -848,6 +895,18 @@ bool DidDoTravelReset = false;
 void* OrigProcessEvent = nullptr;
 
 void ProcessEventHook(UObject* Object, UFunction* Function, void* Parms) {
+    if (TestArena::BeforeServerEvent(Object, Function, Parms, Networking::NetDriver)) return;
+    // Store class/function names before dispatch; the crash handler must not walk UE objects.
+    // No arguments, character names or account identifiers are retained.
+    static thread_local std::map<std::pair<UClass*, UFunction*>, std::string> EventLabels;
+    const char* eventLabel = nullptr;
+    if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766 && Object && Object->Class && Function) {
+        auto [label, inserted] = EventLabels.try_emplace({Object->Class, Function});
+        if (inserted) label->second = "context=" + DojoProbe::ObjectPath(Object->Class)
+            + " function=" + Function->GetFullName();
+        eventLabel = label->second.c_str();
+    }
+    DR_EventScope eventScope(eventLabel);
     // This hook is installed only in game servers. Never inspect RPC arguments
     // or infer bans from timing, movement corrections, or server-side calls.
     if (Function && (Function->FunctionFlags & static_cast<uint32_t>(EFunctionFlags::NetServer))) {
@@ -886,7 +945,11 @@ void ProcessEventHook(UObject* Object, UFunction* Function, void* Parms) {
         return;
     }
 
+    FrostRewardProbe::ObserveProcessEvent(Object, Function, Parms, false);
+    DraskRewardProbe::ObserveProcessEvent(Object, Function, Parms, false);
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEvent)(Object, Function, Parms);
+    FrostRewardProbe::ObserveProcessEvent(Object, Function, Parms, true);
+    DraskRewardProbe::ObserveProcessEvent(Object, Function, Parms, true);
 }
 
 void* OrigConfigCacheIniGetString = nullptr;
@@ -966,6 +1029,12 @@ void EACClientInitHook(void* a1) {
 
 void InitClientHooks() {
     MH_Initialize();
+    FrostReturn::Install(Globals::BaseAddress);
+    if (DojoProbe::IsExpectedProcess() && MH_CreateHook((void*)(Globals::BaseAddress + 0x3307100),
+        FrostClientEngineTickHook, &OrigFrostClientEngineTick) == MH_OK)
+        MH_EnableHook((void*)(Globals::BaseAddress + 0x3307100));
+    MH_CreateHook((void*)(Globals::BaseAddress + 0x1D06D40), GetCommandLineHook, &OrigGetCommandLine);
+    MH_EnableHook((void*)(Globals::BaseAddress + 0x1D06D40));
     RamsStorePilot::Install(Globals::BaseAddress);
 
     DualSense::Install();
@@ -1025,11 +1094,12 @@ int NetModeHook(void* a1) { //char __fastcall UArchonStaminaComponent_TryConsume
 
 void InitServerHooks() {
     MH_Initialize();
+    FrostRewardProbe::Install();
     Networking::InitChannelTracking(Globals::BaseAddress);
 
     // SYSTEM and service accounts do not inherit a launcher-generated Game.ini.
     // The worker reaches the same backend through its loopback SSH tunnel.
-    Globals::MetagameAddress = L"127.0.0.1:61000";
+    Globals::MetagameAddress = L"127.0.0.1:61100";
     MH_CreateHook((void*)(Globals::BaseAddress + 0x1D09D50), ConfigCacheInitGetStringHook, &OrigConfigCacheIniGetString);
     MH_EnableHook((void*)(Globals::BaseAddress + 0x1D09D50));
 
@@ -1227,6 +1297,7 @@ void Init() {
         if (NumArgs > 8) {
             Globals::ServerAPIKey = Args[1];
             Globals::Port = std::stoi(std::wstring(Args[2]));
+            if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766) EnableWatchdog = false;
             Globals::MapPath = Args[3];
             Globals::BehemothPath = Args[4];
             Globals::MatchmakerHuntId = Args[5];
