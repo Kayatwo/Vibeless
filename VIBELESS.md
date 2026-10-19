@@ -10,9 +10,18 @@ is always supplied by the user and is never part of this repository or its relea
 | Ref | Meaning |
 | --- | --- |
 | `upstream/dauntless-revived` | Read-only mirror of `mixutin/dauntless-revived`, branch `dauntless-revived`. Never commit here. |
-| `import/c39bcfa` | The upstream commit the backport lab was built from (v0.0.5, 2026-10-17). |
+| `import/c39bcfa` → `c39bcfa1b1a626c888416ef32f8b420082d7ead7` | The upstream commit the backport lab was built from (v0.0.5, 2026-10-17). |
 | `main` | Vibeless integration branch, rooted at `import/c39bcfa`. |
-| `reconciled/installed-2026-10-19` | Source equivalent to the backport release installed on 2026-10-19 (runtime `9fe01048…3546`, BackportDev tag `installed-2026-10-19-test-arena`). |
+| `reconciled/installed-2026-10-19` → `b6e049ebef73f4e33a136cc8f4af779ded249e79` | Source equivalent to the backport release installed on 2026-10-19 (runtime `9fe01048…3546`, BackportDev tag `installed-2026-10-19-test-arena`). |
+
+The two tags are recorded here because the session that created the repository could not push
+tags. To create them from any clone:
+
+```sh
+git tag -a import/c39bcfa c39bcfa1b1a626c888416ef32f8b420082d7ead7 -m "Upstream dauntless-revived commit imported into BackportDev"
+git tag -a reconciled/installed-2026-10-19 b6e049ebef73f4e33a136cc8f4af779ded249e79 -m "Fork source equivalent to the release installed on 2026-10-19"
+git push origin import/c39bcfa reconciled/installed-2026-10-19
+```
 
 ## Changes on `main` (relative to `import/c39bcfa`)
 
