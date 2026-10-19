@@ -1,7 +1,9 @@
 // Restore authored stats after the stock pursuit spawner's single-number override.
 #pragma once
 #include "OriginalStrengthPolicy.h"
-#include "FrostEncounter.h"
+#include "DojoProbe.h"
+#include "HuntWorld.h"
+#include "FrostHuntConfig.h"
 #include "ThunderdeepHuntConfig.h"
 
 namespace OriginalStrength {
@@ -14,8 +16,8 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
     if (!world || !driver || world->NetDriver != driver || driver->ServerConnection
         || (!FrostHuntConfig::IsDedicatedServer(world, port)
             && !ThunderdeepHuntConfig::IsDedicatedServer(world, port))) return;
-    auto* mode = FrostEncounter::IslandMode(world);
-    auto* state = FrostEncounter::State(world);
+    auto* mode = HuntWorld::IslandMode(world);
+    auto* state = HuntWorld::State(world);
     if (!mode || !state || mode->Class->GetName() != "BPGM_Archon_Prototype_C"
         || mode->SpawnedBehemoths.Num() < 0 || mode->SpawnedBehemoths.Num() > 128) return;
     for (auto* monster : mode->SpawnedBehemoths) {
@@ -23,7 +25,7 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
         const auto expected = OriginalStrengthPolicy::Expected(port, state->MatchmakerHuntID.ToString(), DojoProbe::ObjectPath(monster->Class));
         if (!expected) continue;
         const bool ready = monster->HasAuthority() && monster->Controller && monster->GetCurrentHealth() > 0
-            && FrostEncounter::Contains(state->SpawnedBehemoths, monster);
+            && HuntWorld::Contains(state->SpawnedBehemoths, monster);
         const auto key = std::to_string(monster->Index) + ":" + monster->GetFullName();
         const auto* defaults = static_cast<AArchonBehemoth*>(monster->Class->ClassDefaultObject);
         const float powerBefore = monster->GlobalPower, resistanceBefore = monster->GlobalResistance;

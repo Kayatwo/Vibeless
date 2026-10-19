@@ -120,7 +120,7 @@ inline void Tick(UWorld* world) {
     if(world!=World || !TestArena::IsWorld(world)) {Reset();World=world;RetryAt=0;}
     if(!TestArena::IsWorld(world) || !world->NetDriver || !world->NetDriver->ServerConnection) return;
     auto* player=UArchonGameplayStatics::GetArchonLocalPlayerController(world);
-    if(!player || !player->Pawn || !FrostEncounter::State(world) || !FrostEncounter::State(world)->GameStarted) return;
+    if(!player || !player->Pawn || !HuntWorld::State(world) || !HuntWorld::State(world)->GameStarted) return;
     if(!Alive(Menu,MenuIndex) || player!=Player) {
         if(GetTickCount64()<RetryAt) return;
         Reset();RetryAt=GetTickCount64()+5000;

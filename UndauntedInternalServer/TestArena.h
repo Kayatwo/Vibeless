@@ -1,6 +1,9 @@
 #pragma once
 #include "TestArenaPolicy.h"
-#include "FrostEncounter.h"
+#include "DojoProbe.h"
+#include "HuntWorld.h"
+#include "SDK/UMG_classes.hpp"
+#include "SDK/UMG_parameters.hpp"
 #include "SDK/Engine_parameters.hpp"
 #include <algorithm>
 #include <map>
@@ -54,8 +57,8 @@ inline TArray<AActor*> Creatures(UWorld* world) {
     return actors;
 }
 inline bool Spawn(UWorld* world,AArchonPlayerController* player,const Creature& creature,std::string& result) {
-    auto* mode = FrostEncounter::IslandMode(world);
-    auto* state = FrostEncounter::State(world);
+    auto* mode = HuntWorld::IslandMode(world);
+    auto* state = HuntWorld::State(world);
     auto* pawn = player->Pawn;
     if (!mode || !state || !pawn || !state->GameStarted || pawn->IsActorBeingDestroyed()) { result="Wait until you have landed in the arena."; return false; }
     const auto actors = Creatures(world);
@@ -101,12 +104,12 @@ inline bool Spawn(UWorld* world,AArchonPlayerController* player,const Creature& 
         monster->GlobalPower=defaults->GlobalPower; monster->GlobalResistance=defaults->GlobalResistance;
         monster->UpdateBasePowers(); monster->UpdateBaseResists(true);
     }
-    if (!FrostEncounter::Contains(mode->SpawnedBehemoths,monster)) {
+    if (!HuntWorld::Contains(mode->SpawnedBehemoths,monster)) {
         if (auto* registration=DojoProbe::FindFunction(mode,"RegisterBehemothSpawned")) {
             struct { AArchonBehemoth* Monster; } parameters{monster}; mode->ProcessEvent(registration,&parameters);
         }
     }
-    if (!FrostEncounter::Contains(state->SpawnedBehemoths,monster)) {
+    if (!HuntWorld::Contains(state->SpawnedBehemoths,monster)) {
         if (auto* tracking=DojoProbe::FindFunction(state,"TrackBehemothSpawn")) {
             struct { AArchonBehemoth* Monster; } parameters{monster}; state->ProcessEvent(tracking,&parameters);
         }
@@ -116,7 +119,7 @@ inline bool Spawn(UWorld* world,AArchonPlayerController* player,const Creature& 
 inline int Despawn(UWorld* world,const std::string& path) {
     auto actors=Creatures(world);
     if (actors.Num()<0 || actors.Num()>128) return 0;
-    auto* mode=FrostEncounter::IslandMode(world); auto* state=FrostEncounter::State(world);
+    auto* mode=HuntWorld::IslandMode(world); auto* state=HuntWorld::State(world);
     int count=0;
     const auto remove=[](auto& array,AArchonBehemoth* monster) {
         for(int i=array.Num()-1;i>=0;--i) if(array[i]==monster) array.Remove(i);

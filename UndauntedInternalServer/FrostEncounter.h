@@ -8,6 +8,7 @@
 #include "DojoProbe.h"
 #include "FrostHuntConfig.h"
 #include "FrostIcon.h"
+#include "HuntWorld.h"
 #include "SDK/BPGS_Archon_GameState_classes.hpp"
 #include "SDK/UMG_classes.hpp"
 #include "SDK/UMG_parameters.hpp"
@@ -32,21 +33,9 @@ inline bool IsFrost(AArchonBehemoth* behemoth) {
     return behemoth->Class->GetName() == "mcbeaver_frost_bp_C"
         && (path == "/Game/Monsters/mcrollin/mcbeaver_frost_bp" || path == "/Game/Monsters/frost144/mcbeaver_frost_bp");
 }
-inline bool Contains(const TArray<AArchonBehemoth*>& array, AArchonBehemoth* behemoth) {
-    if (array.Num() < 0 || array.Num() > 128) return false;
-    for (auto* entry : array) if (entry == behemoth) return true;
-    return false;
-}
-inline ABPGS_Archon_GameState_C* State(UWorld* world) {
-    auto* type = UObject::FindClassFast("BPGS_Archon_GameState_C");
-    return world && world->GameState && type && world->GameState->IsA(type)
-        ? static_cast<ABPGS_Archon_GameState_C*>(world->GameState) : nullptr;
-}
-inline AArchonGameMode_Island* IslandMode(UWorld* world) {
-    auto* type = UObject::FindClassFast("ArchonGameMode_Island");
-    return world && world->AuthorityGameMode && type && world->AuthorityGameMode->IsA(type)
-        ? static_cast<AArchonGameMode_Island*>(world->AuthorityGameMode) : nullptr;
-}
+using HuntWorld::Contains;
+using HuntWorld::State;
+using HuntWorld::IslandMode;
 inline void WorldDiagnostics(UWorld* world, const char* side) {
     auto* state = State(world);
     auto* feature = UObject::FindClassFast("ReturnToRamsgateFeature");
