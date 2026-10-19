@@ -135,15 +135,20 @@ describe("ApplyInventoryTransactionInTx", () => {
         assert.equal(Count("inventorylog", "characterId = ?", CharacterId), 0);
     });
 
-    it("overspends follow INVENTORY_REFUSE_OVERSPEND: returned for the caller to log by default, thrown with 1", async () => {
+    it("overspends follow INVENTORY_REFUSE_OVERSPEND: returned for the caller to log with 0, thrown by default", async () => {
         const {UserId, CharacterId} = await MakePlayer();
         const Overspend = () => GetDb().transaction((tx) => ApplyInventoryTransactionInTx(tx, {UserId, CharacterId, TransactionId: Guid(), StackedItemsToAdd: [Stack("REWARD", 2)], StackedItemsToRemove: [Stack("ORB", 4)]}, Store));
 
-        const Clamped = Overspend();
+        process.env.INVENTORY_REFUSE_OVERSPEND = "0";
+        let Clamped: ReturnType<typeof Overspend>;
+        try{
+            Clamped = Overspend();
+        }
+        finally{
+            delete process.env.INVENTORY_REFUSE_OVERSPEND;
+        }
         assert.deepEqual(Clamped.overspent, ["removes 4 of ORB but only 0 held"]);
         assert.equal(StackQuantity(CharacterId, "REWARD"), 2);
-
-        process.env.INVENTORY_REFUSE_OVERSPEND = "1";
 
         try{
             let Caught: unknown;

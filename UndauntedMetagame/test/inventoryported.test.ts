@@ -8,8 +8,8 @@ import { MakePlayer, StackQuantity } from "./helpers";
 // Harmonic's inventory cases (github.com/Harmonicrain/Undaunted 895f7c7, test/inventory.test.js), run
 // against our inventory rules, which stay as verified in play. Where the rules differ, the case asserts
 // ours, as the port plan decided:
-// - an overspend is refused only with INVENTORY_REFUSE_OVERSPEND=1; by default it is clamped (a twin
-//   case checks that), so a hunt's rewards are never lost to a removal the game server got wrong;
+// - an overspend is refused unless INVENTORY_REFUSE_OVERSPEND=0 (Vibeless default); with 0 it is clamped
+//   (a twin case checks that), so a hunt's rewards are not lost to a removal the game server got wrong;
 // - a negative quantity is refused, and a quantity of 0 is still accepted (mastery rewards send 0);
 // - the reply lists every changed stack at its final quantity; the cases compare by catalogId, since
 //   ours lists the added stacks first.
@@ -110,11 +110,18 @@ describe("inventory cases from Harmonic's fork", () => {
     });
 
     // The default-mode twin of line 107: ours clamps, so the rest of the transaction (a hunt's rewards) lands
-    it("by default clamps that removal at 0 and still applies the rest of the transaction", async () => {
+    it("with INVENTORY_REFUSE_OVERSPEND=0 clamps that removal at 0 and still applies the rest of the transaction", async () => {
         const Account = await MakePlayer();
         await Transaction(Account, "tx-over-3", {AddStacked: [{catalogId: "ORB_TEST", quantity: 2}]});
 
-        const Result = await Transaction(Account, "tx-over-4", {AddStacked: [{catalogId: "HUNT_REWARD", quantity: 3}], RemoveStacked: [{catalogId: "ORB_TEST", quantity: 5}]});
+        process.env.INVENTORY_REFUSE_OVERSPEND = "0";
+        let Result: Awaited<ReturnType<typeof Transaction>>;
+        try{
+            Result = await Transaction(Account, "tx-over-4", {AddStacked: [{catalogId: "HUNT_REWARD", quantity: 3}], RemoveStacked: [{catalogId: "ORB_TEST", quantity: 5}]});
+        }
+        finally{
+            delete process.env.INVENTORY_REFUSE_OVERSPEND;
+        }
 
         assert.deepEqual(Reported(Result), [{catalogId: "HUNT_REWARD", quantity: 3}, {catalogId: "ORB_TEST", quantity: 0}]);
         assert.equal(StackQuantity(Account.CharacterId, "ORB_TEST"), 0);
