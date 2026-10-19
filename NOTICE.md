@@ -4,6 +4,17 @@ Dauntless Revived is a modified version of Undaunted. The whole repository is li
 Affero General Public License, version 3 only (`AGPL-3.0-only`); see [LICENSE.txt](LICENSE.txt). This
 file records where the parts of the repository come from. Suomeksi: [below](#suomeksi).
 
+## Vibeless modification notice
+
+Vibeless (private repository `github.com/Kayatwo/Vibeless`, branch `main`) is a modified version of
+Dauntless Revived, itself a modified version of Undaunted. It starts from Dauntless Revived commit
+`c39bcfa1b1a626c888416ef32f8b420082d7ead7` (tag `import/c39bcfa`); Vibeless modifications began on
+19 October 2026 and are recorded commit by commit on `main`. They add 1.4.4-compatible content
+support (Deepfrost Gnasher, Thunderdeep Drask, a private Test Arena) and the changes listed in
+[VIBELESS.md](VIBELESS.md). The whole repository remains under AGPL-3.0-only; every notice below
+still applies. Vibeless is not an official release of Dauntless Revived, Undaunted or any other
+project named here.
+
 ## Modification notice
 
 This repository, [github.com/mixutin/dauntless-revived](https://github.com/mixutin/dauntless-revived)
