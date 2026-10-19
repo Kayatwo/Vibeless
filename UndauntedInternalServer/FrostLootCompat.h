@@ -20,13 +20,13 @@ inline std::string Lower(std::string value) {
 }
 inline void Log(const std::string& body) {
     if (++EventCount > 256) return;
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/frost-loot-compat.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-loot-compat.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64()
         << ",\"port\":" << ActivePort << ',' << body << "}\n";
 }
 // Deliberately reread on the 500 ms engine-tick schedule. Absent/malformed means off.
 inline bool ReadEnabled() {
-    const auto path = std::filesystem::path(DojoProbe::Root) / L"data/frost-loot-compat.ini";
+    const auto path = std::filesystem::path(DojoProbe::Root()) / L"data/frost-loot-compat.ini";
     std::error_code ec;
     const auto size = std::filesystem::file_size(path, ec);
     if (ec || size > 4096) return false;

@@ -36,7 +36,7 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
             && OriginalStrengthPolicy::Matches(monster->GlobalResistance, expected->Resistance)
             && OriginalStrengthPolicy::Matches(monster->GetCurrentHealth(), healthBefore)
             && OriginalStrengthPolicy::Matches(monster->GetMaxHealth(), maxHealthBefore);
-        std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/original-strength.jsonl", std::ios::app);
+        std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/original-strength.jsonl", std::ios::app);
         out << "{\"pid\":" << GetCurrentProcessId() << ",\"port\":" << port
             << ",\"class\":" << DojoProbe::Json(DojoProbe::ObjectPath(monster->Class))
             << ",\"result\":" << DojoProbe::Json(!applied ? "unexpected_class_defaults" : verified ? "restored" : "readback_mismatch")

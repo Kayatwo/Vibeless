@@ -25,7 +25,7 @@ inline UWorld* LastWorld = nullptr;
 inline void Log(const std::string& body) {
     static unsigned count = 0;
     if (count++ >= 512) return;
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/drask-icon.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/drask-icon.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool IsDrask(AArchonBehemoth* behemoth) {
@@ -37,7 +37,7 @@ inline UTexture2D* Load() {
     Texture = nullptr;
     if (LoadAttempts >= 3 || GetTickCount64() < NextLoad) return nullptr;
     std::error_code ec;
-    const auto pak = std::filesystem::path(DojoProbe::Root) / L"game/Archon/Content/Paks/Thunderdeep144_Prototype_P.pak";
+    const auto pak = std::filesystem::path(DojoProbe::Root()) / L"game/Archon/Content/Paks/Thunderdeep144_Prototype_P.pak";
     if (!std::filesystem::is_regular_file(pak, ec) || ec) {
         if (!MissingReported) { Log("\"event\":\"portrait_package_missing\""); MissingReported = true; }
         return nullptr;

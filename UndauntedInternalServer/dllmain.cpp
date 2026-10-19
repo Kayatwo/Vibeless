@@ -449,16 +449,17 @@ const wchar_t* GetCommandLineHook() {
         const auto Original = reinterpret_cast<const wchar_t*(*)()>(OrigGetCommandLine)();
         if (!Original) return Original;
         // The client builds its own engine command line, dropping the OS UserDir.
-        // Keep its authentication arguments intact and carry the isolated path.
-        static const std::wstring IsolatedClientCommandLine = std::wstring(Original)
-            + L" -UserDir=C:/Dauntless/Experiments/Dojo144/user/client/";
+        // Inside a profile, keep its authentication arguments and add the profile's UserDir.
+        static const std::wstring ClientUserDir = ProfileRootPolicy::UserDir(DojoProbe::Root(), false, 0);
+        if (ClientUserDir.empty()) return Original;
+        static const std::wstring IsolatedClientCommandLine = std::wstring(Original) + L" -UserDir=" + ClientUserDir;
         return IsolatedClientCommandLine.c_str();
     }
-    // Local 1.4.4 setup: keep every server's UE settings and logs in this
-    // experiment. The original replacement command line discards -UserDir.
-    static const std::wstring IsolatedCommandLine = std::wstring(ServerCommandLine)
-        + L" -UserDir=C:/Dauntless/Experiments/Dojo144/user/server-"
-        + std::to_wstring(Globals::Port) + L"/";
+    // Inside a profile, keep every server's UE settings and logs there.
+    // The original replacement command line discards -UserDir.
+    static const std::wstring ServerUserDir = ProfileRootPolicy::UserDir(DojoProbe::Root(), true, Globals::Port);
+    if (ServerUserDir.empty()) return ServerCommandLine;
+    static const std::wstring IsolatedCommandLine = std::wstring(ServerCommandLine) + L" -UserDir=" + ServerUserDir;
     return IsolatedCommandLine.c_str();
 }
 
@@ -1100,6 +1101,12 @@ void InitServerHooks() {
     // SYSTEM and service accounts do not inherit a launcher-generated Game.ini.
     // The worker reaches the same backend through its loopback SSH tunnel.
     Globals::MetagameAddress = L"127.0.0.1:61100";
+    {
+        // DR_METAGAME_ADDRESS (host:port) overrides the local default for other layouts.
+        wchar_t Address[256] = {};
+        const DWORD Length = GetEnvironmentVariableW(L"DR_METAGAME_ADDRESS", Address, 256);
+        if (Length > 0 && Length < 256) Globals::MetagameAddress = Address;
+    }
     MH_CreateHook((void*)(Globals::BaseAddress + 0x1D09D50), ConfigCacheInitGetStringHook, &OrigConfigCacheIniGetString);
     MH_EnableHook((void*)(Globals::BaseAddress + 0x1D09D50));
 

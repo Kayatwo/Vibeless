@@ -13,7 +13,7 @@ inline ULONGLONG NextPoll = 0;
 inline UWorld* LastWorld = nullptr;
 inline std::string LastSnapshot;
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/thunderdeep-hunt.jsonl",std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/thunderdeep-hunt.jsonl",std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool HasTag(const FGameplayTagContainer& tags,const char* name) {

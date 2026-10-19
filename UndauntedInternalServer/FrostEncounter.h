@@ -21,7 +21,7 @@ inline std::map<std::string, int> RegistrationAttempts;
 inline std::set<std::string> ReportedSpawns, ReportedHud;
 
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/frost-encounter.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-encounter.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool IsFrost(AArchonBehemoth* behemoth) {

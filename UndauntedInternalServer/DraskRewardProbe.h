@@ -47,7 +47,7 @@ inline std::string UtcNow() {
 inline bool Enabled() {
     static const bool enabled = [] {
         if (!DojoProbe::IsExpectedProcess()) return false;
-        const auto path = std::filesystem::path(DojoProbe::Root) / L"data/drask-reward-probe.ini";
+        const auto path = std::filesystem::path(DojoProbe::Root()) / L"data/drask-reward-probe.ini";
         std::error_code ec;
         const auto size = std::filesystem::file_size(path, ec);
         if (ec || size > 4096) return false;
@@ -65,7 +65,7 @@ inline bool Enabled() {
 inline void Log(const std::string& body) {
     if (EventCount >= MaxEvents) return;
     ++EventCount;
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/drask-rewards.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/drask-rewards.jsonl", std::ios::app);
     out << "{\"version\":1,\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64()
         << ",\"port\":" << ActivePort << ',' << body << "}\n";
 }

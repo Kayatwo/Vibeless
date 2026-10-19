@@ -21,7 +21,7 @@ inline bool MissingReported = false;
 inline std::set<std::string> Reported;
 
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/frost-icon.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-icon.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool IsFrost(AArchonBehemoth* behemoth) {
@@ -37,7 +37,7 @@ inline UTexture2D* Load() {
     Texture = nullptr;
     if (LoadAttempts >= 3 || GetTickCount64() < NextLoad) return nullptr;
     std::error_code ec;
-    const auto pak = std::filesystem::path(DojoProbe::Root) / L"game/Archon/Content/Paks/Deepfrost_Portrait_P.pak";
+    const auto pak = std::filesystem::path(DojoProbe::Root()) / L"game/Archon/Content/Paks/Deepfrost_Portrait_P.pak";
     if (!std::filesystem::is_regular_file(pak, ec) || ec) {
         if (!MissingReported) { Log("\"event\":\"portrait_package_missing\""); MissingReported = true; }
         return nullptr;

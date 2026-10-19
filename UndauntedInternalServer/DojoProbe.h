@@ -16,10 +16,25 @@
 #include "SDK/bp_gamemode_behemoth_spawner_component_classes.hpp"
 #include "SDK/BP_PatrolCenterPoint_classes.hpp"
 #include "SDK/NavigationSystem_classes.hpp"
+#include "ProfileRootPolicy.h"
 
 namespace DojoProbe {
 using namespace SDK;
-inline constexpr wchar_t Root[] = L"C:/Dauntless/Experiments/Dojo144/";
+// Profile root of this game process, or empty outside a Vibeless profile (see ProfileRootPolicy.h).
+inline const std::wstring& Root() {
+    static const std::wstring root = [] {
+        wchar_t exe[32768]{};
+        if (!GetModuleFileNameW(nullptr, exe, 32768)) return std::wstring{};
+        wchar_t env[32768]{};
+        const DWORD length = GetEnvironmentVariableW(L"DR_PROFILE_ROOT", env, 32768);
+        const std::wstring_view envRoot(env, length < 32768 ? length : 0);
+        return ProfileRootPolicy::Resolve(exe, envRoot, [](const std::wstring& marker) {
+            std::error_code error;
+            return std::filesystem::is_regular_file(std::filesystem::path(marker), error);
+        });
+    }();
+    return root;
+}
 inline constexpr char DefaultMonster[] = "/Game/Monsters/mcrollin/mcbeaver_normal_bp.mcbeaver_normal_bp_C";
 inline ULONGLONG NextPoll = 0, NextSample = 0;
 inline std::set<std::string> ConsumedRequests;
@@ -124,12 +139,7 @@ inline UFunction* FindFunction(UObject* object, const std::string& name) {
     return nullptr;
 }
 inline bool IsExpectedProcess() {
-    static const bool valid = [] {
-        wchar_t exe[32768]{};
-        if (!GetModuleFileNameW(nullptr, exe, 32768)) return false;
-        return !_wcsicmp(exe, L"C:\\Dauntless\\Experiments\\Dojo144\\game\\Archon\\Binaries\\Win64\\Dauntless-Win64-Shipping.exe");
-    }();
-    return valid;
+    return !Root().empty();
 }
 struct DraskPracticeConfiguration {
     bool Enabled = false;

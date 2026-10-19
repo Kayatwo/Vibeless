@@ -61,7 +61,7 @@ inline ConfirmedTravel PendingTravel;
 inline ULONGLONG NextConfirmationId = 0;
 
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(DojoProbe::Root) / L"reports/frost-return.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-return.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool ValidFeature() {

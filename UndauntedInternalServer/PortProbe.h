@@ -22,7 +22,7 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
     if (attempted || GetTickCount64() - started < 10000) return;
     // Explicit file opt-in, bounded identifiers, one attempt per fresh process.
     attempted = true;
-    std::ifstream config(std::filesystem::path(DojoProbe::Root) / L"data/port-probe.ini");
+    std::ifstream config(std::filesystem::path(DojoProbe::Root()) / L"data/port-probe.ini");
     std::string selection;
     if (!std::getline(config, selection)) return;
     selection = DojoProbe::Trim(selection);
@@ -32,7 +32,7 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
     const bool isClass = selection == "old-frost" || selection == "modern-bellydrift" || selection == "ported-frost" || aoe;
     const bool pose = selection == "adapted-aether-pose";
     if (pose) {
-        const auto paks = std::filesystem::path(DojoProbe::Root) / L"game/Archon/Content/Paks";
+        const auto paks = std::filesystem::path(DojoProbe::Root()) / L"game/Archon/Content/Paks";
         if (!std::filesystem::exists(paks / L"Deepfrost_AetherEnter_Adapted_P.pak")
             || std::filesystem::exists(paks / L"Deepfrost_AetherEnter_Probe_P.pak")) return;
     }
@@ -44,7 +44,7 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
     else if (selection == "modern-bellydrift-montage") path = "/Game/Monsters/mcrollin/beaver_frost/montages/b_beaver_frost_bellydrift_atk_mot.b_beaver_frost_bellydrift_atk_mot";
     else if (selection == "modern-aetherenter-animation" || pose) path = "/Game/Monsters/mcrollin/anims/b_tp_beaver_fr_state_aetherenter_fwd_00.b_tp_beaver_fr_state_aetherenter_fwd_00";
     else return;
-    const auto report = std::filesystem::path(DojoProbe::Root) / L"reports"
+    const auto report = std::filesystem::path(DojoProbe::Root()) / L"reports"
         / (L"port-probe-" + std::to_wstring(GetCurrentProcessId()) + L".jsonl");
     const auto record = [&](const std::string& event, UObject* object) {
         std::ofstream out(report, std::ios::app);

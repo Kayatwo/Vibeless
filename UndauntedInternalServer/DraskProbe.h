@@ -44,7 +44,7 @@ template<class T> inline bool Bounded(const TArray<T>& array, int limit) {
 inline void Log(const std::string& body) {
     if (EventCount >= MaxEvents) return;
     ++EventCount;
-    const auto report = std::filesystem::path(DojoProbe::Root) / L"reports"
+    const auto report = std::filesystem::path(DojoProbe::Root()) / L"reports"
         / (L"drask-probe-" + std::to_wstring(GetCurrentProcessId()) + L".jsonl");
     std::ofstream out(report, std::ios::app);
     out << "{\"version\":1,\"pid\":" << GetCurrentProcessId() << ",\"utc\":" << DojoProbe::Json(UtcNow())
@@ -63,7 +63,7 @@ inline bool Scope(UWorld* world, UNetDriver* driver, int port) {
 }
 // The marker is read once when valid. It does not queue a spawn or enable a hook.
 inline bool ReadMarker() {
-    const auto path = std::filesystem::path(DojoProbe::Root) / L"data/drask-probe.ini";
+    const auto path = std::filesystem::path(DojoProbe::Root()) / L"data/drask-probe.ini";
     std::error_code ec;
     const auto size = std::filesystem::file_size(path, ec);
     if (ec || size == 0 || size > 1024) return false;

@@ -19,7 +19,7 @@ inline std::string RunId;
 
 inline void Log(const std::string& body) {
     if (++Events > 1024) return;
-    const auto report = std::filesystem::path(DojoProbe::Root) / L"reports"
+    const auto report = std::filesystem::path(DojoProbe::Root()) / L"reports"
         / (L"equipment-probe-" + std::to_wstring(GetCurrentProcessId()) + L".jsonl");
     std::ofstream out(report, std::ios::app);
     out << "{\"version\":1,\"pid\":" << GetCurrentProcessId()
@@ -28,7 +28,7 @@ inline void Log(const std::string& body) {
         << ",\"assetSet\":" << DojoProbe::Json(AssetSetSha256) << ',' << body << "}\n";
 }
 inline bool ReadMarker() {
-    const auto marker = std::filesystem::path(DojoProbe::Root) / L"data/equipment-probe.ini";
+    const auto marker = std::filesystem::path(DojoProbe::Root()) / L"data/equipment-probe.ini";
     std::error_code error;
     const auto bytes = std::filesystem::file_size(marker, error);
     if (error || bytes == 0 || bytes > 1024) return false;
