@@ -123,12 +123,12 @@ describe("ApplyStackedChanges", () => {
         assert.equal(Result.Overspent.length, 2);
     });
 
-    it("refuses only with INVENTORY_REFUSE_OVERSPEND=1", () => {
+    it("refuses unless INVENTORY_REFUSE_OVERSPEND=0", () => {
         const Old = process.env.INVENTORY_REFUSE_OVERSPEND;
 
         try{
             delete process.env.INVENTORY_REFUSE_OVERSPEND;
-            assert.equal(IsOverspendRefused(), false);
+            assert.equal(IsOverspendRefused(), true);
             process.env.INVENTORY_REFUSE_OVERSPEND = "0";
             assert.equal(IsOverspendRefused(), false);
             process.env.INVENTORY_REFUSE_OVERSPEND = "1";
@@ -198,15 +198,15 @@ describe("RunInventoryTransaction", () => {
         assert.equal(StackQuantity(CharacterId, "ORB"), 2);
     });
 
-    it("runs a reused id with a different body as a new transaction", async () => {
+    it("refuses a reused id with a different body as a conflict", async () => {
         const {UserId, CharacterId} = await MakePlayer();
         const Id = Guid();
 
         await Grant(UserId, CharacterId, Id, [Stack("ORB", 2)]);
         const Other = await Grant(UserId, CharacterId, Id, [Stack("ORB", 5)]);
 
-        assert.ok(Other.success && !Other.data!.replayed);
-        assert.equal(StackQuantity(CharacterId, "ORB"), 7);
+        assert.deepEqual(Other, {success: false, error: "conflict"});
+        assert.equal(StackQuantity(CharacterId, "ORB"), 2);
     });
 
     it("does not deduplicate transactions without a usable id", async () => {
@@ -219,7 +219,7 @@ describe("RunInventoryTransaction", () => {
         assert.equal(Count("inventorytransactions", "characterId = ?", CharacterId), 0);
     });
 
-    it("with INVENTORY_REFUSE_OVERSPEND=1, refuses an overspend as a whole: the grant in the same transaction is not applied either", async () => {
+    it("by default, refuses an overspend as a whole: the grant in the same transaction is not applied either", async () => {
         const {UserId, CharacterId} = await MakePlayer();
         await Grant(UserId, CharacterId, Guid(), [Stack("ORB", 3)]);
         const LogBefore = Count("inventorylog", "characterId = ?", CharacterId);
@@ -254,11 +254,18 @@ describe("RunInventoryTransaction", () => {
         }
     });
 
-    it("by default runs an overspending transaction the old way: the removal is clamped, the rest applied", async () => {
+    it("with INVENTORY_REFUSE_OVERSPEND=0, runs an overspending transaction the old way: the removal is clamped, the rest applied", async () => {
         const {UserId, CharacterId} = await MakePlayer();
         await Grant(UserId, CharacterId, Guid(), [Stack("ORB", 1)]);
 
-        const Result = await Grant(UserId, CharacterId, Guid(), [Stack("REWARD", 3)], [Stack("ORB", 2), Stack("NEVER_HELD", 1)]);
+        process.env.INVENTORY_REFUSE_OVERSPEND = "0";
+        let Result: Awaited<ReturnType<typeof Grant>>;
+        try{
+            Result = await Grant(UserId, CharacterId, Guid(), [Stack("REWARD", 3)], [Stack("ORB", 2), Stack("NEVER_HELD", 1)]);
+        }
+        finally{
+            delete process.env.INVENTORY_REFUSE_OVERSPEND;
+        }
 
         assert.ok(Result.success);
         assert.deepEqual(ReadStacks(CharacterId), [Stack("REWARD", 3)]);

@@ -147,14 +147,12 @@ export function ParseStackQuantity(Item: any, Operation: string){
     return Quantity as number;
 }
 
-// Off unless INVENTORY_REFUSE_OVERSPEND=1. No hunt-end /inventory body has been
-// captured yet, and a refusal drops the whole transaction, rewards included; until
-// the captures show what the game server removes, an overspend is clamped as it
-// always was and logged ("Allowing overspend") so it can be judged.
+// Vibeless: on unless INVENTORY_REFUSE_OVERSPEND=0, so crafting and upgrades must
+// consume materials actually held. A refusal drops the whole transaction, rewards
+// included; INVENTORY_REFUSE_OVERSPEND=0 restores upstream's clamping, which logs
+// each overspend ("Allowing overspend") and applies the rest.
 export function IsOverspendRefused(){
-    // Isolated development economy: crafting/upgrades must consume materials
-    // actually held. Native reward grants still share one atomic transaction.
-    return true;
+    return process.env.INVENTORY_REFUSE_OVERSPEND !== "0";
 }
 
 // Daily token stacks the game server grants, raised to our own daily amount: the grant is
@@ -746,7 +744,7 @@ function LogOverspend(Request: InventoryTransactionRequest, Context: InventoryCo
 
     const Source = typeof Context.Source === "string" ? `, source ${Context.Source}` : "";
 
-    logger.warn(`Allowing overspend in transactionId ${Request.TransactionId} for userId ${Request.UserId} and characterId ${Request.CharacterId} (${Context.Caller}${Source}): ${Overspent.join("; ")}; clamped at 0 as before (INVENTORY_REFUSE_OVERSPEND=1 refuses these)`);
+    logger.warn(`Allowing overspend in transactionId ${Request.TransactionId} for userId ${Request.UserId} and characterId ${Request.CharacterId} (${Context.Caller}${Source}): ${Overspent.join("; ")}; clamped at 0 because INVENTORY_REFUSE_OVERSPEND=0`);
 }
 
 // POST /inventory. The lists are passed exactly as they arrived; the reply echoes two of them the
