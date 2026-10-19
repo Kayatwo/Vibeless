@@ -34,7 +34,32 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
    Reconciliation below).
 4. Overspend refusal on by default; `INVENTORY_REFUSE_OVERSPEND=0` restores upstream clamping.
 5. Repository rules: LF storage for text files (`.gitattributes`), Windows CI for SDK-dependent
-   tests.
+   tests; Dependabot version updates disabled (dependencies follow the upstream sync policy).
+6. Profile root instead of the hard-coded lab path (`ProfileRootPolicy.h`).
+7. Adjustable foundation settings (`FoundationSettings.h`).
+8. Published-source proxy loader (`VibelessProxy/`), built and tested in CI.
+
+## Profiles and settings
+
+Vibeless features (backport creatures, Test Arena, diagnostics) run only when the game executable
+sits at `<root>/game/Archon/Binaries/Win64/Dauntless-Win64-Shipping.exe` and `<root>` is the
+original BackportDev lab, contains `vibeless-profile.json`, or equals `DR_PROFILE_ROOT`. The
+profile's client and servers then use `<root>/user/client/` and `<root>/user/server-<port>/` as
+UserDir and write diagnostics under `<root>/reports/`. Any other installation runs the upstream
+behaviour.
+
+| Environment variable | Read by | Values | Default |
+| --- | --- | --- | --- |
+| `DR_PROFILE_ROOT` | client, game servers | profile folder (must be the folder the game runs from) | unset |
+| `DR_METAGAME_ADDRESS` | game servers | `host:port` of the metagame | `127.0.0.1:61100` |
+| `DR_CELL_FUSION_HOURS` | client and game servers (same value) | `1`-`720`, or `retail`/`0` for the cooked 22/46/70 h | `1` |
+| `DR_AUTO_PRESS_START` | client | on/off | on |
+| `DR_DUALSENSE` | client | on/off | on |
+| `INVENTORY_REFUSE_OVERSPEND` | metagame | `0` restores upstream clamping | refuse |
+
+The upstream variables (for example `DR_SERVER_MAX_FPS`, `DR_RAMSGATE_POOL`, the metagame's
+`STORE*` switches) keep their documented meaning. The Trials schedule rewrite is not a setting:
+without it the cooked 1.4.4 schedule ended in March 2021.
 
 ## Reconciliation evidence
 
