@@ -86,9 +86,12 @@ errors, the Test Arena session (now a composed hunt rule) spawned, despawned and
 Training Grounds stayed original; the core profile reported no features, used the bundled tables and ran
 Ramsgate and Training Grounds. Not yet verified: backport pursuits on a progressed account, the Vibeless proxy loader in
 game, clean-machine and offline installation, and upgrade/rollback.
-The compatibility contract (`621e37a` onwards) was tried in game once: requirements were served, the
-client reported and showed its message box, but flagged the internal `hunt-services` feature. The fix
-(internal features are left out of the contract) still needs a CI build and an in-game check.
+The compatibility contract was checked in game on 2026-10-20 with bundle `0.1.0+a32fcb4b7765`: a
+matching client was reported compatible and entered Ramsgate; with the Test Arena's `.pak` removed the
+client named "backport.test-arena 1.0.0: ZZ_TestArena144_P.pak is missing." in its message box and
+closed, and with the client check off (`DR_COMPATIBILITY_CHECK=off`) the metagame refused its
+matchmaking for the same reason. (An earlier build flagged the internal `hunt-services` feature; fixed
+in `63bb307`.)
 
 ## Profiles and settings
 
