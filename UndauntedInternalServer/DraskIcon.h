@@ -4,7 +4,7 @@
 #include <fstream>
 #include <set>
 #include <string>
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "PortraitDiscoveryPolicy.h"
 #include "PortraitSizingPolicy.h"
 #include "SDK/UMG_classes.hpp"
@@ -25,19 +25,19 @@ inline UWorld* LastWorld = nullptr;
 inline void Log(const std::string& body) {
     static unsigned count = 0;
     if (count++ >= 512) return;
-    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/drask-icon.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(FeatureSupport::Root()) / L"reports/drask-icon.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool IsDrask(AArchonBehemoth* behemoth) {
     return behemoth && !behemoth->IsActorBeingDestroyed() && behemoth->Class
-        && DojoProbe::ObjectPath(behemoth->Class) == "/Game/Monsters/drask144/fulgar_alpha_bp.fulgar_alpha_bp_C";
+        && FeatureSupport::ObjectPath(behemoth->Class) == "/Game/Monsters/drask144/fulgar_alpha_bp.fulgar_alpha_bp_C";
 }
 inline UTexture2D* Load() {
     if (Texture && TextureIndex >= 0 && UObject::GObjects->GetByIndex(TextureIndex) == Texture) return Texture;
     Texture = nullptr;
     if (LoadAttempts >= 3 || GetTickCount64() < NextLoad) return nullptr;
     std::error_code ec;
-    const auto pak = std::filesystem::path(DojoProbe::Root()) / L"game/Archon/Content/Paks/Thunderdeep144_Prototype_P.pak";
+    const auto pak = std::filesystem::path(FeatureSupport::Root()) / L"game/Archon/Content/Paks/Thunderdeep144_Prototype_P.pak";
     if (!std::filesystem::is_regular_file(pak, ec) || ec) {
         if (!MissingReported) { Log("\"event\":\"portrait_package_missing\""); MissingReported = true; }
         return nullptr;
@@ -51,9 +51,9 @@ inline UTexture2D* Load() {
     const int32 width = texture ? texture->Blueprint_GetSizeX() : 0, height = texture ? texture->Blueprint_GetSizeY() : 0;
     const bool valid = texture && width == 512 && height == 512;
     Log("\"event\":\"portrait_load\",\"attempt\":" + std::to_string(LoadAttempts)
-        + ",\"loaded\":" + DojoProbe::Bool(texture != nullptr) + ",\"width\":" + std::to_string(width)
-        + ",\"height\":" + std::to_string(height) + ",\"valid\":" + DojoProbe::Bool(valid)
-        + ",\"asset\":" + (asset ? DojoProbe::Json(asset->GetFullName()) : "null"));
+        + ",\"loaded\":" + FeatureSupport::Bool(texture != nullptr) + ",\"width\":" + std::to_string(width)
+        + ",\"height\":" + std::to_string(height) + ",\"valid\":" + FeatureSupport::Bool(valid)
+        + ",\"asset\":" + (asset ? FeatureSupport::Json(asset->GetFullName()) : "null"));
     if (!valid) return nullptr;
     Texture = texture; TextureIndex = texture->Index;
     LoadAttempts = 0; // Successful loads must not exhaust retries across later hunts/GC.
@@ -63,7 +63,7 @@ inline UTexture2D* Load() {
 // Keep calling on later ticks: missing packages/slots never block normal HUD setup.
 inline bool Apply(UHUDBehemothStateWidget* slot) {
     auto* world = UWorld::GetWorld();
-    if (!DojoProbe::IsExpectedProcess() || !world || !world->NetDriver || !world->NetDriver->ServerConnection
+    if (!FeatureSupport::IsExpectedProcess() || !world || !world->NetDriver || !world->NetDriver->ServerConnection
         || world->AuthorityGameMode || !slot || !slot->BehemothIcon) return false;
     auto* behemoth = slot->Behemoth.Get();
     if (!IsDrask(behemoth) || behemoth->GetCurrentHealth() <= 0) return false;
@@ -83,13 +83,13 @@ inline bool Apply(UHUDBehemothStateWidget* slot) {
     const bool first = Reported.find(key) == Reported.end();
     const auto& prior = image->Brush;
     if (first) Log("\"event\":\"portrait_before_repair\",\"monsterIndex\":" + std::to_string(behemoth->Index)
-        + ",\"imageRevealed\":" + DojoProbe::Bool(behemoth->bImageRevealed)
-        + ",\"stockPortraitVisible\":" + DojoProbe::Bool(stockPortraitVisible)
-        + ",\"uvValid\":" + DojoProbe::Bool(prior.UVRegion.bIsValid != 0)
+        + ",\"imageRevealed\":" + FeatureSupport::Bool(behemoth->bImageRevealed)
+        + ",\"stockPortraitVisible\":" + FeatureSupport::Bool(stockPortraitVisible)
+        + ",\"uvValid\":" + FeatureSupport::Bool(prior.UVRegion.bIsValid != 0)
         + ",\"uvMinX\":" + std::to_string(prior.UVRegion.Min.X) + ",\"uvMinY\":" + std::to_string(prior.UVRegion.Min.Y)
         + ",\"uvMaxX\":" + std::to_string(prior.UVRegion.Max.X) + ",\"uvMaxY\":" + std::to_string(prior.UVRegion.Max.Y)
-        + ",\"brushTintWhite\":" + DojoProbe::Bool(white(prior.TintColor.SpecifiedColor))
-        + ",\"imageColorWhite\":" + DojoProbe::Bool(white(image->ColorAndOpacity))
+        + ",\"brushTintWhite\":" + FeatureSupport::Bool(white(prior.TintColor.SpecifiedColor))
+        + ",\"imageColorWhite\":" + FeatureSupport::Bool(white(image->ColorAndOpacity))
         + ",\"renderOpacity\":" + std::to_string(image->RenderOpacity)
         + ",\"visibility\":" + std::to_string(static_cast<int>(image->Visibility)));
     // Reusing the old portrait brush can retain atlas UVs, silhouette tint or tiling.
@@ -101,8 +101,8 @@ inline bool Apply(UHUDBehemothStateWidget* slot) {
         || !white(prior.TintColor.SpecifiedColor)) {
         auto* type = UObject::FindClassFast("WidgetBlueprintLibrary");
         auto* library = type ? type->ClassDefaultObject : nullptr;
-        auto* make = DojoProbe::FindFunction(library, "MakeBrushFromTexture");
-        auto* set = DojoProbe::FindFunction(image, "SetBrush");
+        auto* make = FeatureSupport::FindFunction(library, "MakeBrushFromTexture");
+        auto* set = FeatureSupport::FindFunction(image, "SetBrush");
         if (!library || !make || !set) return false;
         Params::WidgetBlueprintLibrary_MakeBrushFromTexture params{};
         params.Texture = texture;
@@ -124,35 +124,35 @@ inline bool Apply(UHUDBehemothStateWidget* slot) {
     if (first || !white(image->ColorAndOpacity)) {
         Params::Image_SetColorAndOpacity color{};
         color.InColorAndOpacity.R = color.InColorAndOpacity.G = color.InColorAndOpacity.B = color.InColorAndOpacity.A = 1.0f;
-        if (auto* function = DojoProbe::FindFunction(image, "SetColorAndOpacity")) image->ProcessEvent(function, &color);
+        if (auto* function = FeatureSupport::FindFunction(image, "SetColorAndOpacity")) image->ProcessEvent(function, &color);
     }
     if (image->RenderOpacity != 1.0f) {
         Params::Widget_SetRenderOpacity opacity{};
         opacity.InOpacity = 1.0f;
-        if (auto* function = DojoProbe::FindFunction(image, "SetRenderOpacity")) image->ProcessEvent(function, &opacity);
+        if (auto* function = FeatureSupport::FindFunction(image, "SetRenderOpacity")) image->ProcessEvent(function, &opacity);
     }
     const auto visibility = image->Visibility;
     if (visibility == ESlateVisibility::Hidden || visibility == ESlateVisibility::Collapsed) {
         Params::Widget_SetVisibility visible{};
         visible.InVisibility = ESlateVisibility::HitTestInvisible;
-        if (auto* function = DojoProbe::FindFunction(image, "SetVisibility")) image->ProcessEvent(function, &visible);
+        if (auto* function = FeatureSupport::FindFunction(image, "SetVisibility")) image->ProcessEvent(function, &visible);
     }
     const bool sizedToStock = PortraitSizingPolicy::Matches(image->Brush, PortraitSizingPolicy::Drask);
     const bool applied = image->Brush.ResourceObject == texture && sizedToStock
         && white(image->Brush.TintColor.SpecifiedColor) && white(image->ColorAndOpacity)
         && image->RenderOpacity == 1.0f;
     if (Reported.insert(key).second) Log("\"event\":\"portrait_bound\",\"monsterIndex\":" + std::to_string(behemoth->Index)
-        + ",\"slot\":" + DojoProbe::Json(slot->GetName()) + ",\"applied\":" + DojoProbe::Bool(applied)
-        + ",\"fullTextureBrush\":" + DojoProbe::Bool(!image->Brush.UVRegion.bIsValid)
-        + ",\"sizedToStock\":" + DojoProbe::Bool(sizedToStock)
+        + ",\"slot\":" + FeatureSupport::Json(slot->GetName()) + ",\"applied\":" + FeatureSupport::Bool(applied)
+        + ",\"fullTextureBrush\":" + FeatureSupport::Bool(!image->Brush.UVRegion.bIsValid)
+        + ",\"sizedToStock\":" + FeatureSupport::Bool(sizedToStock)
         + ",\"uvMinX\":" + std::to_string(image->Brush.UVRegion.Min.X) + ",\"uvMinY\":" + std::to_string(image->Brush.UVRegion.Min.Y)
         + ",\"uvMaxX\":" + std::to_string(image->Brush.UVRegion.Max.X) + ",\"uvMaxY\":" + std::to_string(image->Brush.UVRegion.Max.Y)
-        + ",\"imageRevealed\":" + DojoProbe::Bool(behemoth->bImageRevealed));
+        + ",\"imageRevealed\":" + FeatureSupport::Bool(behemoth->bImageRevealed));
     return applied;
 }
 // Existing client-engine tick, exact lab and exact ported actor only.
 inline void Tick(UWorld* world) {
-    if (!DojoProbe::IsExpectedProcess() || !world || !world->NetDriver
+    if (!FeatureSupport::IsExpectedProcess() || !world || !world->NetDriver
         || !world->NetDriver->ServerConnection || world->AuthorityGameMode) return;
     static ULONGLONG next = 0;
     if (GetTickCount64() < next) return;
@@ -172,7 +172,7 @@ inline void Tick(UWorld* world) {
     if (!player) return;
     auto* type = UObject::FindClassFast("WidgetBlueprintLibrary");
     auto* library = type ? type->ClassDefaultObject : nullptr;
-    auto* function = DojoProbe::FindFunction(library, "GetAllWidgetsOfClass");
+    auto* function = FeatureSupport::FindFunction(library, "GetAllWidgetsOfClass");
     if (!library || !function) return;
     Params::WidgetBlueprintLibrary_GetAllWidgetsOfClass query{};
     query.WorldContextObject = world;
@@ -181,7 +181,7 @@ inline void Tick(UWorld* world) {
     library->ProcessEvent(function, &query);
     if (query.FoundWidgets.Num() < 0 || query.FoundWidgets.Num() > 32) return;
     for (auto* widget : query.FoundWidgets) {
-        if (!widget || DojoProbe::ActorOutput(widget, "GetOwningPlayer") != player) continue;
+        if (!widget || FeatureSupport::ActorOutput(widget, "GetOwningPlayer") != player) continue;
         auto* manager = static_cast<UHUDBehemothHealthManagerWidget*>(widget);
         if (!manager->BehemothStateWidget1 && !manager->BehemothStateWidget2 && !manager->BehemothStateWidget3) continue;
         const auto slotHas = [](UHUDBehemothStateWidget* slot, AArchonBehemoth* actor) {
@@ -200,8 +200,8 @@ inline void Tick(UWorld* world) {
             const bool boundAfter = slotHas(manager->BehemothStateWidget1, behemoth)
                 || slotHas(manager->BehemothStateWidget2, behemoth) || slotHas(manager->BehemothStateWidget3, behemoth);
             Log("\"event\":\"hud_registration\",\"monsterIndex\":" + std::to_string(behemoth->Index)
-                + ",\"alreadyBound\":" + DojoProbe::Bool(bound) + ",\"boundAfterNotification\":" + DojoProbe::Bool(boundAfter)
-                + ",\"imageRevealed\":" + DojoProbe::Bool(behemoth->bImageRevealed));
+                + ",\"alreadyBound\":" + FeatureSupport::Bool(bound) + ",\"boundAfterNotification\":" + FeatureSupport::Bool(boundAfter)
+                + ",\"imageRevealed\":" + FeatureSupport::Bool(behemoth->bImageRevealed));
         }
         Apply(manager->BehemothStateWidget1);
         Apply(manager->BehemothStateWidget2);

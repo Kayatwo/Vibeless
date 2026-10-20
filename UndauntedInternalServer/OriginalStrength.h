@@ -1,7 +1,7 @@
 // Restore authored stats after the stock pursuit spawner's single-number override.
 #pragma once
 #include "OriginalStrengthPolicy.h"
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "HuntWorld.h"
 #include "FrostHuntConfig.h"
 #include "ThunderdeepHuntConfig.h"
@@ -22,7 +22,7 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
         || mode->SpawnedBehemoths.Num() < 0 || mode->SpawnedBehemoths.Num() > 128) return;
     for (auto* monster : mode->SpawnedBehemoths) {
         if (!monster || !monster->Class || monster->IsDefaultObject() || monster->IsActorBeingDestroyed()) continue;
-        const auto expected = OriginalStrengthPolicy::Expected(port, state->MatchmakerHuntID.ToString(), DojoProbe::ObjectPath(monster->Class));
+        const auto expected = OriginalStrengthPolicy::Expected(port, state->MatchmakerHuntID.ToString(), FeatureSupport::ObjectPath(monster->Class));
         if (!expected) continue;
         const bool ready = monster->HasAuthority() && monster->Controller && monster->GetCurrentHealth() > 0
             && HuntWorld::Contains(state->SpawnedBehemoths, monster);
@@ -38,10 +38,10 @@ inline void Tick(UWorld* world, UNetDriver* driver, int port) {
             && OriginalStrengthPolicy::Matches(monster->GlobalResistance, expected->Resistance)
             && OriginalStrengthPolicy::Matches(monster->GetCurrentHealth(), healthBefore)
             && OriginalStrengthPolicy::Matches(monster->GetMaxHealth(), maxHealthBefore);
-        std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/original-strength.jsonl", std::ios::app);
+        std::ofstream out(std::filesystem::path(FeatureSupport::Root()) / L"reports/original-strength.jsonl", std::ios::app);
         out << "{\"pid\":" << GetCurrentProcessId() << ",\"port\":" << port
-            << ",\"class\":" << DojoProbe::Json(DojoProbe::ObjectPath(monster->Class))
-            << ",\"result\":" << DojoProbe::Json(!applied ? "unexpected_class_defaults" : verified ? "restored" : "readback_mismatch")
+            << ",\"class\":" << FeatureSupport::Json(FeatureSupport::ObjectPath(monster->Class))
+            << ",\"result\":" << FeatureSupport::Json(!applied ? "unexpected_class_defaults" : verified ? "restored" : "readback_mismatch")
             << ",\"powerBefore\":" << powerBefore << ",\"resistanceBefore\":" << resistanceBefore
             << ",\"power\":" << monster->GlobalPower << ",\"resistance\":" << monster->GlobalResistance
             << ",\"healthBefore\":" << healthBefore << ",\"health\":" << monster->GetCurrentHealth()

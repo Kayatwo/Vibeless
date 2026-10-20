@@ -5,7 +5,7 @@
 #include <map>
 #include <set>
 #include <sstream>
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "FrostHuntConfig.h"
 #include "SDK/monsterpart_bpc_classes.hpp"
 #include "SDK/monsterpart_bpc_parameters.hpp"
@@ -45,8 +45,8 @@ inline std::string UtcNow() {
 
 inline bool Enabled() {
     static const bool enabled = [] {
-        if (!DojoProbe::IsExpectedProcess()) return false;
-        const auto path = std::filesystem::path(DojoProbe::Root()) / L"data/frost-reward-probe.ini";
+        if (!FeatureSupport::IsExpectedProcess()) return false;
+        const auto path = std::filesystem::path(FeatureSupport::Root()) / L"data/frost-reward-probe.ini";
         std::error_code ec;
         const auto size = std::filesystem::file_size(path, ec);
         if (ec || size > 4096) return false;
@@ -54,8 +54,8 @@ inline bool Enabled() {
         std::string line;
         while (std::getline(input, line)) {
             const auto split = line.find('=');
-            if (split != std::string::npos && DojoProbe::Trim(line.substr(0, split)) == "Enabled")
-                return DojoProbe::Trim(line.substr(split + 1)) == "1";
+            if (split != std::string::npos && FeatureSupport::Trim(line.substr(0, split)) == "Enabled")
+                return FeatureSupport::Trim(line.substr(split + 1)) == "1";
         }
         return false;
     }();
@@ -64,11 +64,11 @@ inline bool Enabled() {
 inline void Log(const std::string& body) {
     if (EventCount >= MaxEvents) return;
     ++EventCount;
-    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-rewards.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(FeatureSupport::Root()) / L"reports/frost-rewards.jsonl", std::ios::app);
     out << "{\"version\":1,\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64()
         << ",\"port\":" << ActivePort << ',' << body << "}\n";
 }
-inline std::string Label(const FName& value) { return DojoProbe::Json(value.ToString().substr(0, 256)); }
+inline std::string Label(const FName& value) { return FeatureSupport::Json(value.ToString().substr(0, 256)); }
 inline std::string Number(float value) { return std::isfinite(value) ? std::to_string(value) : "null"; }
 template<class T> inline bool Bounded(const TArray<T>& array, int limit) {
     return array.Num() >= 0 && array.Num() <= limit && array.Max() >= array.Num()
@@ -76,7 +76,7 @@ template<class T> inline bool Bounded(const TArray<T>& array, int limit) {
 }
 inline bool IsPortedFrost(AActor* actor) {
     return actor && actor->Class && !actor->IsActorBeingDestroyed() && actor->HasAuthority()
-        && DojoProbe::ObjectPath(actor->Class) == FrostHuntConfig::MonsterPath;
+        && FeatureSupport::ObjectPath(actor->Class) == FrostHuntConfig::MonsterPath;
 }
 inline std::string Items(const TArray<FGiveItemInfo>& items) {
     if (!Bounded(items, MaxItems)) return "null";
@@ -105,8 +105,8 @@ inline std::string LootMember(UObject* object, const char* name, bool stringValu
                 if (!Bounded<wchar_t>(text, 256)) return "null";
                 for (int i = 0; i < text.Num() && text[i]; ++i) value += static_cast<char>(text[i]);
             } else value = reinterpret_cast<const FName*>(address)->ToString();
-            return "{\"type\":" + DojoProbe::Json(kind) + ",\"offset\":" + std::to_string(property->Offset)
-                + ",\"value\":" + DojoProbe::Json(value) + "}";
+            return "{\"type\":" + FeatureSupport::Json(kind) + ",\"offset\":" + std::to_string(property->Offset)
+                + ",\"value\":" + FeatureSupport::Json(value) + "}";
         }
     return "null";
 }
@@ -126,14 +126,14 @@ inline std::string LootDefinition(Umonsterpart_bpc_C* part) {
     if (!Bounded(part->PartBreakData, MaxStages)) return "null";
     InReadGetter = true;
     struct { FString BaseLootName; } baseParams{};
-    if (auto* function = DojoProbe::FindFunction(part, "GetBaseLootName")) part->ProcessEvent(function, &baseParams);
+    if (auto* function = FeatureSupport::FindFunction(part, "GetBaseLootName")) part->ProcessEvent(function, &baseParams);
     const auto& base = baseParams.BaseLootName;
-    auto* breakFunction = DojoProbe::FindFunction(part, "GetBreakLootName");
+    auto* breakFunction = FeatureSupport::FindFunction(part, "GetBreakLootName");
     std::string baseName;
     if (Bounded<wchar_t>(base, 512)) {
         for (int i = 0; i < base.Num() && base[i]; ++i) baseName += static_cast<char>(base[i]);
     }
-    std::string json = "{\"baseLootName\":" + DojoProbe::Json(baseName) + ",\"stages\":[";
+    std::string json = "{\"baseLootName\":" + FeatureSupport::Json(baseName) + ",\"stages\":[";
     for (int i = 0; i < part->PartBreakData.Num(); ++i) {
         struct { int32 BreakIndex; FName LootName; } breakParams{};
         static_assert(offsetof(decltype(breakParams), LootName) == 4);
@@ -156,7 +156,7 @@ inline void SamplePart(Umonsterpart_bpc_C* part, AArchonBehemoth* monster) {
     const float maximum = part->UMonsterPartComponent::GetMaxHealth();
     const int bucket = std::isfinite(health) && std::isfinite(maximum) && maximum > 0
         ? static_cast<int>(std::clamp(health / maximum, 0.0f, 1.0f) * 10.0f) : -1;
-    const auto stateKey = std::to_string(part->CurrentBreakStage) + ":" + DojoProbe::Bool(part->PartSevered) + ":" + arrays;
+    const auto stateKey = std::to_string(part->CurrentBreakStage) + ":" + FeatureSupport::Bool(part->PartSevered) + ":" + arrays;
     const bool hadPositiveHealth = !initial && found->second.PositiveHealth;
     const bool damageObserved = !initial && (found->second.DamageObserved
         || (std::isfinite(health) && std::isfinite(found->second.LastHealth) && health + 0.01f < found->second.LastHealth));
@@ -169,13 +169,13 @@ inline void SamplePart(Umonsterpart_bpc_C* part, AArchonBehemoth* monster) {
     const bool stageTransition = !initial && (part->CurrentBreakStage > found->second.Stage
         || (part->PartSevered && !found->second.Severed));
     const bool breakObserved = stageTransition && hadPositiveHealth && damageObserved;
-    std::string body = "\"event\":" + DojoProbe::Json(breakObserved ? "part_break_observed" : stageTransition ? "part_stage_transition" : "part_sample")
-        + ",\"initial\":" + DojoProbe::Bool(initial) + ",\"monsterIndex\":" + std::to_string(monster->Index)
-        + ",\"partIndex\":" + std::to_string(part->Index) + ",\"component\":" + DojoProbe::Json(part->GetName())
+    std::string body = "\"event\":" + FeatureSupport::Json(breakObserved ? "part_break_observed" : stageTransition ? "part_stage_transition" : "part_sample")
+        + ",\"initial\":" + FeatureSupport::Bool(initial) + ",\"monsterIndex\":" + std::to_string(monster->Index)
+        + ",\"partIndex\":" + std::to_string(part->Index) + ",\"component\":" + FeatureSupport::Json(part->GetName())
         + ",\"partName\":" + Label(part->PartName) + ",\"stage\":" + std::to_string(part->CurrentBreakStage)
         + ",\"previousStage\":" + (initial ? "null" : std::to_string(found->second.Stage))
-        + ",\"priorPositiveHealth\":" + DojoProbe::Bool(hadPositiveHealth) + ",\"priorDamageObserved\":" + DojoProbe::Bool(damageObserved)
-        + ",\"severed\":" + DojoProbe::Bool(part->PartSevered) + ",\"partHealth\":" + Number(health)
+        + ",\"priorPositiveHealth\":" + FeatureSupport::Bool(hadPositiveHealth) + ",\"priorDamageObserved\":" + FeatureSupport::Bool(damageObserved)
+        + ",\"severed\":" + FeatureSupport::Bool(part->PartSevered) + ",\"partHealth\":" + Number(health)
         + ",\"partMaxHealth\":" + Number(maximum) + ",\"monsterHealth\":" + Number(monster->GetCurrentHealth())
         + ",\"lootState\":" + arrays;
     if (initial) body += ",\"lootDefinition\":" + LootDefinition(part);
@@ -191,8 +191,8 @@ inline void Reset(UWorld* world, int port) {
     auto* stateType = UObject::FindClassFast("ArchonGameState");
     const auto huntId = world && world->GameState && stateType && world->GameState->IsA(stateType)
         ? static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString() : std::string{};
-    Log("\"event\":\"world\",\"map\":" + DojoProbe::Json(world ? world->GetName() : "")
-        + ",\"utc\":" + DojoProbe::Json(UtcNow()) + ",\"matchmakerHuntId\":" + DojoProbe::Json(huntId)
+    Log("\"event\":\"world\",\"map\":" + FeatureSupport::Json(world ? world->GetName() : "")
+        + ",\"utc\":" + FeatureSupport::Json(UtcNow()) + ",\"matchmakerHuntId\":" + FeatureSupport::Json(huntId)
         + ",\"readOnly\":true,\"pollMs\":500,\"nativeCallbacksMayBypassProcessEvent\":true");
 }
 // Root calls from its existing server engine tick. No worker thread touches engine objects.
@@ -223,7 +223,7 @@ inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
         auto* monster = static_cast<AArchonBehemoth*>(actor);
         if (ReportedMonsters.insert(monster->Index).second)
             Log("\"event\":\"monster_loot_definition\",\"monsterIndex\":" + std::to_string(monster->Index)
-                + ",\"classPath\":" + DojoProbe::Json(DojoProbe::ObjectPath(monster->Class))
+                + ",\"classPath\":" + FeatureSupport::Json(FeatureSupport::ObjectPath(monster->Class))
                 + ",\"archetype\":" + LootMember(monster, "ArchetypeName")
                 + ",\"classification\":" + LootMember(monster, "ClassificationName")
                 + ",\"classificationLootOverride\":" + LootMember(monster, "ClassificationLootNameOverride")
@@ -280,17 +280,17 @@ inline void ObserveProcessEvent(UObject* object, UFunction* function, void* para
         if (name == "AuthAddLoot") stage = static_cast<Params::monsterpart_bpc_C_AuthAddLoot*>(parameters)->BreakIndex;
         else if (name == "AuthHandleBreak") stage = static_cast<Params::monsterpart_bpc_C_AuthHandleBreak*>(parameters)->NextStage;
         else return;
-        Log("\"event\":\"part_callback\",\"function\":" + DojoProbe::Json(name)
-            + ",\"after\":" + DojoProbe::Bool(after) + ",\"partIndex\":" + std::to_string(object->Index)
+        Log("\"event\":\"part_callback\",\"function\":" + FeatureSupport::Json(name)
+            + ",\"after\":" + FeatureSupport::Bool(after) + ",\"partIndex\":" + std::to_string(object->Index)
             + ",\"monsterIndex\":" + std::to_string(part->second.MonsterIndex) + ",\"requestedStage\":" + std::to_string(stage));
     } else if (Droppers.count(object) && object->Index == Droppers[object]) {
         if (name == "AuthTryDropLoot") {
             const auto* p = static_cast<Params::loot_dropper_bpc_C_AuthTryDropLoot*>(parameters);
-            Log(std::string("\"event\":\"drop_request\",\"after\":") + DojoProbe::Bool(after) + ",\"lootName\":" + Label(p->_Optional_CustomLoot)
+            Log(std::string("\"event\":\"drop_request\",\"after\":") + FeatureSupport::Bool(after) + ",\"lootName\":" + Label(p->_Optional_CustomLoot)
                 + ",\"bodyPart\":" + std::to_string(static_cast<int>(p->_Optional_BrokenBodyPart)));
         } else if (name == "CreateLootForPlayers") {
             const auto* p = static_cast<Params::loot_dropper_bpc_C_CreateLootForPlayers*>(parameters);
-            Log(std::string("\"event\":\"loot_roll_callback\",\"after\":") + DojoProbe::Bool(after) + ",\"lootName\":" + Label(p->LootID)
+            Log(std::string("\"event\":\"loot_roll_callback\",\"after\":") + FeatureSupport::Bool(after) + ",\"lootName\":" + Label(p->LootID)
                 + ",\"bodyPart\":" + std::to_string(static_cast<int>(p->BrokenBodyPart)));
         }
     } else if (Inventories.count(object) && function->Outer == AArchonInventory::StaticClass()) {
@@ -301,11 +301,11 @@ inline void ObserveProcessEvent(UObject* object, UFunction* function, void* para
             const auto* p = static_cast<Params::ArchonInventory_UnpackItems*>(parameters);
             items = after ? &p->ReturnValue : &p->ItemList;
         }
-        if (items) Log("\"event\":\"inventory_callback\",\"function\":" + DojoProbe::Json(name)
-            + ",\"after\":" + DojoProbe::Bool(after) + ",\"items\":" + Items(*items));
+        if (items) Log("\"event\":\"inventory_callback\",\"function\":" + FeatureSupport::Json(name)
+            + ",\"after\":" + FeatureSupport::Bool(after) + ",\"items\":" + Items(*items));
     } else if (name == "AddPendingLootForPlayer" && function->Outer == UPlayerLootBlueprintLibrary::StaticClass()) {
         const auto* p = static_cast<Params::PlayerLootBlueprintLibrary_AddPendingLootForPlayer*>(parameters);
-        if (Players.count(p->Player)) Log(std::string("\"event\":\"pending_loot_callback\",\"after\":") + DojoProbe::Bool(after) + ",\"items\":" + Items(p->Loot));
+        if (Players.count(p->Player)) Log(std::string("\"event\":\"pending_loot_callback\",\"after\":") + FeatureSupport::Bool(after) + ",\"items\":" + Items(p->Loot));
     } else if (name == "QueryGrantedLootForPlayer" && after && function->Outer == UPlayerLootBlueprintLibrary::StaticClass()) {
         const auto* p = static_cast<Params::PlayerLootBlueprintLibrary_QueryGrantedLootForPlayer*>(parameters);
         if (Players.count(p->Player)) Log("\"event\":\"granted_loot_query_callback\",\"items\":" + Items(p->Loot));

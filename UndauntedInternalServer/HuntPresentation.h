@@ -1,6 +1,6 @@
 #pragma once
 #include "HuntPresentationPolicy.h"
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "SDK/huntinfo_current_loadout_rec_bpw_parameters.hpp"
 #include "SDK/hunt_function_library_parameters.hpp"
 
@@ -8,7 +8,7 @@ namespace HuntPresentation {
 using namespace SDK;
 inline FText Text(const std::wstring& value) { return UKismetTextLibrary::Conv_StringToText(FString(value.c_str())); }
 inline void AfterEvent(UObject* object, UFunction* function, void* parameters) {
-    if (!DojoProbe::IsExpectedProcess() || !object || !function) return;
+    if (!FeatureSupport::IsExpectedProcess() || !object || !function) return;
     const auto name = function->GetName();
     if (parameters && name == "GetAverageBehemothPowerForHunt"
         && function->Outer && function->Outer->GetName() == "hunt_function_library_C") {
@@ -28,7 +28,7 @@ inline void AfterEvent(UObject* object, UFunction* function, void* parameters) {
             Params::huntinfo_current_loadout_rec_bpw_C_GetBehemothElement element{};
             element.PlayerHuntId = query.PlayerHuntId;
             element.MatchmakerHuntID = query.MatchmakerHuntID;
-            if (auto* getElement = DojoProbe::FindFunction(widget, "GetBehemothElement")) {
+            if (auto* getElement = FeatureSupport::FindFunction(widget, "GetBehemothElement")) {
                 widget->ProcessEvent(getElement, &element);
                 const auto colour = [](bool ready) {
                     FSlateColor result{};
@@ -56,7 +56,7 @@ inline void AfterEvent(UObject* object, UFunction* function, void* parameters) {
 }
 inline void Tick(UWorld* world) {
     static ULONGLONG next=0;
-    if(!DojoProbe::IsExpectedProcess() || !world || GetTickCount64()<next) return;
+    if(!FeatureSupport::IsExpectedProcess() || !world || GetTickCount64()<next) return;
     next=GetTickCount64()+100;
     auto* panelType=UObject::FindClassFast("huntinfo_current_loadout_rec_bpw_C");
     if(!panelType) return;
@@ -68,7 +68,7 @@ inline void Tick(UWorld* world) {
         auto* page=static_cast<UHuntInfoPageWidget*>(candidate);
         const auto id=page->MapItemViewModel.PlayerHuntId.ToString();
         if(!HuntPresentationPolicy::ForHunt(id,"")) continue;
-        AfterEvent(page,DojoProbe::FindFunction(page,"OnViewModelUpdated"),nullptr);
+        AfterEvent(page,FeatureSupport::FindFunction(page,"OnViewModelUpdated"),nullptr);
         // Blueprint-to-Blueprint calls can bypass UObject::ProcessEvent. Also
         // correct the page's bound recommendation widget from its current ID.
         auto* panel=page->RecommendedPowerPanel;
@@ -76,7 +76,7 @@ inline void Tick(UWorld* world) {
         Params::huntinfo_current_loadout_rec_bpw_C_UpdateRecommendedStats query{};
         const std::wstring wide(id.begin(),id.end());
         query.PlayerHuntId=FString(wide.c_str());query.MatchmakerHuntID=FString(L"");query.PlayerLoadout=page->PlayerLoadoutViewModel;
-        AfterEvent(panel,DojoProbe::FindFunction(panel,"UpdateRecommendedStats"),&query);
+        AfterEvent(panel,FeatureSupport::FindFunction(panel,"UpdateRecommendedStats"),&query);
     }
 }
 }

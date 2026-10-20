@@ -5,7 +5,7 @@
 #include <map>
 #include <set>
 #include <string>
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "FrostHuntConfig.h"
 #include "FrostIcon.h"
 #include "HuntWorld.h"
@@ -22,7 +22,7 @@ inline std::map<std::string, int> RegistrationAttempts;
 inline std::set<std::string> ReportedSpawns, ReportedHud;
 
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-encounter.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(FeatureSupport::Root()) / L"reports/frost-encounter.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool IsFrost(AArchonBehemoth* behemoth) {
@@ -40,43 +40,43 @@ inline void WorldDiagnostics(UWorld* world, const char* side) {
     auto* state = State(world);
     auto* feature = UObject::FindClassFast("ReturnToRamsgateFeature");
     const bool returnEnabled = feature && UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabled(world, feature);
-    Log("\"event\":\"world\",\"side\":" + DojoProbe::Json(side)
-        + ",\"map\":" + DojoProbe::Json(world->GetName())
-        + ",\"gameStateClass\":" + (world->GameState ? DojoProbe::Json(world->GameState->Class->GetName()) : "null")
-        + ",\"matchmakerHuntId\":" + (state ? DojoProbe::Json(state->MatchmakerHuntID.ToString()) : "null")
-        + ",\"gameStarted\":" + (state ? DojoProbe::Bool(state->GameStarted) : "null")
-        + ",\"isTrainingGround\":" + DojoProbe::Bool(UArchonGameplayStatics::IsInTrainingGround(world))
-        + ",\"returnFeatureAvailable\":" + DojoProbe::Bool(feature != nullptr)
-        + ",\"returnFeatureEnabled\":" + DojoProbe::Bool(returnEnabled));
+    Log("\"event\":\"world\",\"side\":" + FeatureSupport::Json(side)
+        + ",\"map\":" + FeatureSupport::Json(world->GetName())
+        + ",\"gameStateClass\":" + (world->GameState ? FeatureSupport::Json(world->GameState->Class->GetName()) : "null")
+        + ",\"matchmakerHuntId\":" + (state ? FeatureSupport::Json(state->MatchmakerHuntID.ToString()) : "null")
+        + ",\"gameStarted\":" + (state ? FeatureSupport::Bool(state->GameStarted) : "null")
+        + ",\"isTrainingGround\":" + FeatureSupport::Bool(UArchonGameplayStatics::IsInTrainingGround(world))
+        + ",\"returnFeatureAvailable\":" + FeatureSupport::Bool(feature != nullptr)
+        + ",\"returnFeatureEnabled\":" + FeatureSupport::Bool(returnEnabled));
 }
 inline void SpawnDiagnostics(UWorld* world, AArchonBehemoth* behemoth, const std::string& key) {
     if (!ReportedSpawns.insert(key).second) return;
     struct { FName Name; } metadata{};
-    if (auto* function = DojoProbe::FindFunction(behemoth, "GetMetadataTableName")) behemoth->ProcessEvent(function, &metadata);
+    if (auto* function = FeatureSupport::FindFunction(behemoth, "GetMetadataTableName")) behemoth->ProcessEvent(function, &metadata);
     struct { Fbehemoth_spawn_params Params; } spawn{};
-    const bool hasSpawnParams = DojoProbe::FindFunction(behemoth, "GetSpawnParams") != nullptr;
-    if (hasSpawnParams) behemoth->ProcessEvent(DojoProbe::FindFunction(behemoth, "GetSpawnParams"), &spawn);
+    const bool hasSpawnParams = FeatureSupport::FindFunction(behemoth, "GetSpawnParams") != nullptr;
+    if (hasSpawnParams) behemoth->ProcessEvent(FeatureSupport::FindFunction(behemoth, "GetSpawnParams"), &spawn);
     FString archetype, classification;
     behemoth->GetBehemothNameDataNative(&archetype, &classification);
     auto* mode = IslandMode(world);
     auto* state = State(world);
     Log("\"event\":\"spawn_diagnostics\",\"monsterIndex\":" + std::to_string(behemoth->Index)
-        + ",\"class\":" + DojoProbe::Json(behemoth->Class->GetFullName())
-        + ",\"metadataKey\":" + DojoProbe::Json(metadata.Name.ToString())
-        + ",\"archetype\":" + DojoProbe::Json(archetype.ToString()) + ",\"classification\":" + DojoProbe::Json(classification.ToString())
-        + ",\"matchmakerHuntId\":" + (state ? DojoProbe::Json(state->MatchmakerHuntID.ToString()) : "null")
-        + ",\"modeTracked\":" + DojoProbe::Bool(mode && Contains(mode->SpawnedBehemoths, behemoth))
-        + ",\"stateTracked\":" + DojoProbe::Bool(state && Contains(state->SpawnedBehemoths, behemoth))
-        + ",\"imageRevealed\":" + DojoProbe::Bool(behemoth->bImageRevealed)
-        + ",\"hasSpawnParams\":" + DojoProbe::Bool(hasSpawnParams)
-        + ",\"triggersEndOfMission\":" + DojoProbe::Bool(spawn.Params.TriggersEndOfMission_1_D5DFABCB49AC889D090A90B4FFC5588B)
-        + ",\"temporarySpawn\":" + DojoProbe::Bool(spawn.Params.IsTemporarySpawnedBehemoth_5_22372EA1469479FC8833F3A5F783A857)
+        + ",\"class\":" + FeatureSupport::Json(behemoth->Class->GetFullName())
+        + ",\"metadataKey\":" + FeatureSupport::Json(metadata.Name.ToString())
+        + ",\"archetype\":" + FeatureSupport::Json(archetype.ToString()) + ",\"classification\":" + FeatureSupport::Json(classification.ToString())
+        + ",\"matchmakerHuntId\":" + (state ? FeatureSupport::Json(state->MatchmakerHuntID.ToString()) : "null")
+        + ",\"modeTracked\":" + FeatureSupport::Bool(mode && Contains(mode->SpawnedBehemoths, behemoth))
+        + ",\"stateTracked\":" + FeatureSupport::Bool(state && Contains(state->SpawnedBehemoths, behemoth))
+        + ",\"imageRevealed\":" + FeatureSupport::Bool(behemoth->bImageRevealed)
+        + ",\"hasSpawnParams\":" + FeatureSupport::Bool(hasSpawnParams)
+        + ",\"triggersEndOfMission\":" + FeatureSupport::Bool(spawn.Params.TriggersEndOfMission_1_D5DFABCB49AC889D090A90B4FFC5588B)
+        + ",\"temporarySpawn\":" + FeatureSupport::Bool(spawn.Params.IsTemporarySpawnedBehemoth_5_22372EA1469479FC8833F3A5F783A857)
         + ",\"maxHealth\":" + std::to_string(behemoth->GetMaxHealth()));
 }
 // Call after a manual spawn, or let TickServer discover the normal hunt's spawn.
 // Only missing stock registrations are repaired; existing death/reward bindings are left alone.
 inline bool RegisterSpawn(UWorld* world, AArchonBehemoth* behemoth, int port) {
-    if ((port != HuntPortPolicy::TrainingGrounds() && !FrostHuntConfig::IsDedicatedServer(world, port)) || !DojoProbe::IsExpectedProcess() || !world || !world->NetDriver || world->NetDriver->ServerConnection
+    if ((port != HuntPortPolicy::TrainingGrounds() && !FrostHuntConfig::IsDedicatedServer(world, port)) || !FeatureSupport::IsExpectedProcess() || !world || !world->NetDriver || world->NetDriver->ServerConnection
         || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority() || !IsFrost(behemoth)
         || !behemoth->HasAuthority() || !behemoth->Controller || behemoth->GetCurrentHealth() <= 0) return false;
     auto* mode = IslandMode(world);
@@ -84,7 +84,7 @@ inline bool RegisterSpawn(UWorld* world, AArchonBehemoth* behemoth, int port) {
     if (!mode || !state || world->AuthorityGameMode->Class->GetName() != "BPGM_Archon_Prototype_C") return false;
     const auto key = std::to_string(behemoth->Index) + ":" + behemoth->GetFullName();
     // Normal hunt spawning already owns kill, part and reward bindings.
-    if (FrostHuntConfig::IsDedicatedWorld(world) || DojoProbe::FrostHuntEnabled()) {
+    if (FrostHuntConfig::IsDedicatedWorld(world)) {
         SpawnDiagnostics(world, behemoth, key);
         return Contains(mode->SpawnedBehemoths, behemoth) && Contains(state->SpawnedBehemoths, behemoth);
     }
@@ -97,12 +97,12 @@ inline bool RegisterSpawn(UWorld* world, AArchonBehemoth* behemoth, int port) {
     const bool modeBefore = Contains(mode->SpawnedBehemoths, behemoth), stateBefore = Contains(state->SpawnedBehemoths, behemoth);
     bool calledMode = false, calledState = false;
     struct { AArchonBehemoth* Behemoth; } params{behemoth};
-    if (!modeBefore) if (auto* function = DojoProbe::FindFunction(mode, "RegisterBehemothSpawned")) {
+    if (!modeBefore) if (auto* function = FeatureSupport::FindFunction(mode, "RegisterBehemothSpawned")) {
         mode->ProcessEvent(function, &params);
         calledMode = true;
     }
     // The normal game mode registration normally reaches this itself.
-    if (!Contains(state->SpawnedBehemoths, behemoth)) if (auto* function = DojoProbe::FindFunction(state, "TrackBehemothSpawn")) {
+    if (!Contains(state->SpawnedBehemoths, behemoth)) if (auto* function = FeatureSupport::FindFunction(state, "TrackBehemothSpawn")) {
         state->ProcessEvent(function, &params);
         calledState = true;
     }
@@ -110,14 +110,14 @@ inline bool RegisterSpawn(UWorld* world, AArchonBehemoth* behemoth, int port) {
     state->ForceNetUpdate();
     behemoth->ForceNetUpdate();
     Log("\"event\":\"registration\",\"monsterIndex\":" + std::to_string(behemoth->Index)
-        + ",\"modeBefore\":" + DojoProbe::Bool(modeBefore) + ",\"stateBefore\":" + DojoProbe::Bool(stateBefore)
-        + ",\"calledModeRegistration\":" + DojoProbe::Bool(calledMode) + ",\"calledStateTracking\":" + DojoProbe::Bool(calledState)
-        + ",\"modeAfter\":" + DojoProbe::Bool(modeAfter) + ",\"stateAfter\":" + DojoProbe::Bool(stateAfter));
+        + ",\"modeBefore\":" + FeatureSupport::Bool(modeBefore) + ",\"stateBefore\":" + FeatureSupport::Bool(stateBefore)
+        + ",\"calledModeRegistration\":" + FeatureSupport::Bool(calledMode) + ",\"calledStateTracking\":" + FeatureSupport::Bool(calledState)
+        + ",\"modeAfter\":" + FeatureSupport::Bool(modeAfter) + ",\"stateAfter\":" + FeatureSupport::Bool(stateAfter));
     SpawnDiagnostics(world, behemoth, key);
     return modeAfter && stateAfter;
 }
 inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
-    if ((port != HuntPortPolicy::TrainingGrounds() && !FrostHuntConfig::IsDedicatedServer(world, port)) || !DojoProbe::IsExpectedProcess() || !world || !driver || world->NetDriver != driver || driver->ServerConnection
+    if ((port != HuntPortPolicy::TrainingGrounds() && !FrostHuntConfig::IsDedicatedServer(world, port)) || !FeatureSupport::IsExpectedProcess() || !world || !driver || world->NetDriver != driver || driver->ServerConnection
         || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority() || GetTickCount64() < NextServerPoll) return;
     NextServerPoll = GetTickCount64() + 1000;
     if (ServerWorld != world) {
@@ -136,7 +136,7 @@ inline bool SlotHas(UHUDBehemothStateWidget* slot, AArchonBehemoth* behemoth) {
 // Optional client recovery, called after the client engine tick (never from inside ProcessEvent).
 // It replays the stock HUD notification only when all three existing slots missed the spawn.
 inline void TickClient(UWorld* world) {
-    if (!DojoProbe::IsExpectedProcess() || !world || !world->NetDriver || !world->NetDriver->ServerConnection
+    if (!FeatureSupport::IsExpectedProcess() || !world || !world->NetDriver || !world->NetDriver->ServerConnection
         || world->AuthorityGameMode || GetTickCount64() < NextClientPoll) return;
     NextClientPoll = GetTickCount64() + 1000;
     const auto map = world->GetName();
@@ -149,8 +149,8 @@ inline void TickClient(UWorld* world) {
         WorldDiagnostics(world, "client");
         auto* huntType = UObject::FindClassFast("HuntSystemComponent");
         auto* hunt = huntType ? static_cast<UHuntSystemComponent*>(player->GetComponentByClass(huntType)) : nullptr;
-        Log("\"event\":\"client_travel_state\",\"playerHuntId\":" + (hunt ? DojoProbe::Json(hunt->GetPlayerHuntID().ToString()) : "null")
-            + ",\"fastTravelPending\":" + DojoProbe::Bool(player->bFastTravelToCityPending));
+        Log("\"event\":\"client_travel_state\",\"playerHuntId\":" + (hunt ? FeatureSupport::Json(hunt->GetPlayerHuntID().ToString()) : "null")
+            + ",\"fastTravelPending\":" + FeatureSupport::Bool(player->bFastTravelToCityPending));
     }
     TArray<AActor*> actors;
     UGameplayStatics::GetAllActorsOfClass(world, AArchonBehemoth::StaticClass(), &actors);
@@ -161,7 +161,7 @@ inline void TickClient(UWorld* world) {
     query.TopLevelOnly = false;
     auto* libraryType = UObject::FindClassFast("WidgetBlueprintLibrary");
     auto* library = libraryType ? libraryType->ClassDefaultObject : nullptr;
-    auto* queryFunction = DojoProbe::FindFunction(library, "GetAllWidgetsOfClass");
+    auto* queryFunction = FeatureSupport::FindFunction(library, "GetAllWidgetsOfClass");
     if (!library || !queryFunction) return;
     library->ProcessEvent(queryFunction, &query);
     const auto& widgets = query.FoundWidgets;
@@ -170,7 +170,7 @@ inline void TickClient(UWorld* world) {
         auto* behemoth = static_cast<AArchonBehemoth*>(actor);
         if (!IsFrost(behemoth) || behemoth->GetCurrentHealth() <= 0) continue;
         for (auto* widget : widgets) {
-            if (!widget || DojoProbe::ActorOutput(widget, "GetOwningPlayer") != player) continue;
+            if (!widget || FeatureSupport::ActorOutput(widget, "GetOwningPlayer") != player) continue;
             auto* manager = static_cast<UHUDBehemothHealthManagerWidget*>(widget);
             if (!manager->BehemothStateWidget1 && !manager->BehemothStateWidget2 && !manager->BehemothStateWidget3) continue;
             const bool bound = SlotHas(manager->BehemothStateWidget1, behemoth) || SlotHas(manager->BehemothStateWidget2, behemoth)
@@ -187,9 +187,9 @@ inline void TickClient(UWorld* world) {
             auto* image = slot ? slot->BehemothIcon : nullptr;
             FrostIcon::Apply(slot);
             Log("\"event\":\"hud_registration\",\"monsterIndex\":" + std::to_string(behemoth->Index)
-                + ",\"alreadyBound\":" + DojoProbe::Bool(bound) + ",\"boundAfterNotification\":" + DojoProbe::Bool(slot != nullptr)
-                + ",\"imageRevealed\":" + DojoProbe::Bool(behemoth->bImageRevealed)
-                + ",\"iconResource\":" + (image && image->Brush.ResourceObject ? DojoProbe::Json(image->Brush.ResourceObject->GetFullName()) : "null"));
+                + ",\"alreadyBound\":" + FeatureSupport::Bool(bound) + ",\"boundAfterNotification\":" + FeatureSupport::Bool(slot != nullptr)
+                + ",\"imageRevealed\":" + FeatureSupport::Bool(behemoth->bImageRevealed)
+                + ",\"iconResource\":" + (image && image->Brush.ResourceObject ? FeatureSupport::Json(image->Brush.ResourceObject->GetFullName()) : "null"));
         }
     }
 }

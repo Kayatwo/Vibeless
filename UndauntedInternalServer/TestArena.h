@@ -1,10 +1,13 @@
 #pragma once
 #include "TestArenaPolicy.h"
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "HuntWorld.h"
 #include "SDK/UMG_classes.hpp"
 #include "SDK/UMG_parameters.hpp"
 #include "SDK/Engine_parameters.hpp"
+#include "SDK/bp_gamemode_behemoth_spawner_component_parameters.hpp"
+#include "SDK/bp_gamemode_behemoth_spawner_component_classes.hpp"
+#include "SDK/NavigationSystem_classes.hpp"
 #include <algorithm>
 #include <map>
 
@@ -12,11 +15,11 @@ namespace TestArena {
 using namespace SDK;
 struct Creature { std::string Id, Label, Path; };
 inline bool IsWorld(UWorld* world) {
-    if (!DojoProbe::IsExpectedProcess() || !world || !world->GameState
+    if (!FeatureSupport::IsExpectedProcess() || !world || !world->GameState
         || !world->GameState->IsA(AArchonGameState::StaticClass())) return false;
     auto* state = static_cast<AArchonGameState*>(world->GameState);
-    return TestArenaPolicy::IsArena(DojoProbe::ObjectPath(world), state->MatchmakerHuntID.ToString(),
-        DojoProbe::ObjectPath(state->GameModeClass.Get()));
+    return TestArenaPolicy::IsArena(FeatureSupport::ObjectPath(world), state->MatchmakerHuntID.ToString(),
+        FeatureSupport::ObjectPath(state->GameModeClass.Get()));
 }
 inline std::vector<Creature> Catalog(UWorld* world) {
     std::vector<Creature> result;
@@ -68,7 +71,7 @@ inline bool Spawn(UWorld* world,AArchonPlayerController* player,const Creature& 
     if (living >= TestArenaPolicy::MaxLiving) { result="Three creatures are already alive. Despawn one first."; return false; }
     auto* spawnerType=Ubp_gamemode_behemoth_spawner_component_C::StaticClass();
     auto* component=mode->GetComponentByClass(spawnerType);
-    auto* spawn=DojoProbe::FindFunction(component,"SpawnBehemothAtLocation");
+    auto* spawn=FeatureSupport::FindFunction(component,"SpawnBehemothAtLocation");
     if (!component || !spawn) { result="The arena spawner is not ready."; return false; }
     const std::wstring path(creature.Path.begin(),creature.Path.end());
     auto* type=UKismetSystemLibrary::LoadClassAsset_Blocking(UKismetSystemLibrary::Conv_SoftClassPathToSoftClassRef(UKismetSystemLibrary::MakeSoftClassPath(path.c_str())));
@@ -105,12 +108,12 @@ inline bool Spawn(UWorld* world,AArchonPlayerController* player,const Creature& 
         monster->UpdateBasePowers(); monster->UpdateBaseResists(true);
     }
     if (!HuntWorld::Contains(mode->SpawnedBehemoths,monster)) {
-        if (auto* registration=DojoProbe::FindFunction(mode,"RegisterBehemothSpawned")) {
+        if (auto* registration=FeatureSupport::FindFunction(mode,"RegisterBehemothSpawned")) {
             struct { AArchonBehemoth* Monster; } parameters{monster}; mode->ProcessEvent(registration,&parameters);
         }
     }
     if (!HuntWorld::Contains(state->SpawnedBehemoths,monster)) {
-        if (auto* tracking=DojoProbe::FindFunction(state,"TrackBehemothSpawn")) {
+        if (auto* tracking=FeatureSupport::FindFunction(state,"TrackBehemothSpawn")) {
             struct { AArchonBehemoth* Monster; } parameters{monster}; state->ProcessEvent(tracking,&parameters);
         }
     }
@@ -125,7 +128,7 @@ inline int Despawn(UWorld* world,const std::string& path) {
         for(int i=array.Num()-1;i>=0;--i) if(array[i]==monster) array.Remove(i);
     };
     for(auto* actor:actors) if(actor && actor->HasAuthority() && !actor->IsActorBeingDestroyed()
-        && (path.empty() || DojoProbe::ObjectPath(actor->Class)==path)) {
+        && (path.empty() || FeatureSupport::ObjectPath(actor->Class)==path)) {
         auto* monster=static_cast<AArchonBehemoth*>(actor);
         // Destroy rather than kill: no death rewards or hunt completion.
         actor->K2_DestroyActor();

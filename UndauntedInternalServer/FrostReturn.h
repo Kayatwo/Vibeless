@@ -8,7 +8,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "FrostHuntConfig.h"
 #include "ThunderdeepHuntConfig.h"
 #include "TestArenaPolicy.h"
@@ -61,7 +61,7 @@ inline ConfirmedTravel PendingTravel;
 inline ULONGLONG NextConfirmationId = 0;
 
 inline void Log(const std::string& body) {
-    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-return.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(FeatureSupport::Root()) / L"reports/frost-return.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64() << ',' << body << "}\n";
 }
 inline bool ValidFeature() {
@@ -80,12 +80,12 @@ inline void Restore() {
                 && Feature->PerEnvironmentSettings[setting.Index].Key().ToString() == setting.Key)
                 Feature->PerEnvironmentSettings[setting.Index].Value() = setting.Value;
     }
-    Log("\"event\":\"native_return_feature_restored\",\"featureValid\":" + std::string(DojoProbe::Bool(valid)));
+    Log("\"event\":\"native_return_feature_restored\",\"featureValid\":" + std::string(FeatureSupport::Bool(valid)));
     Active = false; Feature = nullptr; FeatureIndex = -1;
     OriginalBranches.clear(); OriginalEnvironments.clear();
 }
 inline bool IsFrostArenaClient(UWorld* world) {
-    if (!DojoProbe::IsExpectedProcess() || !world || world->AuthorityGameMode
+    if (!FeatureSupport::IsExpectedProcess() || !world || world->AuthorityGameMode
         || !world->NetDriver || !world->NetDriver->ServerConnection || !world->GameState) return false;
     if (FrostHuntConfig::IsDedicatedWorld(world) || ThunderdeepHuntConfig::IsDedicatedWorld(world)) return true;
     const auto map = world->GetName();
@@ -94,8 +94,8 @@ inline bool IsFrostArenaClient(UWorld* world) {
     auto* stateType = UObject::FindClassFast("ArchonGameState");
     if (!stateType || !world->GameState->IsA(stateType)) return false;
     const auto hunt = static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString();
-    if (TestArenaPolicy::IsArena(DojoProbe::ObjectPath(world), hunt,
-        DojoProbe::ObjectPath(world->GameState->GameModeClass.Get()))) return true;
+    if (TestArenaPolicy::IsArena(FeatureSupport::ObjectPath(world), hunt,
+        FeatureSupport::ObjectPath(world->GameState->GameModeClass.Get()))) return true;
     return hunt.empty() || hunt == "None" || hunt == "CR19_MatchmakerHunt_Beaver" || hunt == "ShatteredIsles_TrainingDojo";
 }
 inline UWorld* ControllerWorld(AArchonPlayerController* player) {
@@ -106,21 +106,20 @@ inline UWorld* ControllerWorld(AArchonPlayerController* player) {
 inline bool IsLabReturnWorld(UWorld* world) {
     if (!IsFrostArenaClient(world)) return false;
     const auto hunt = static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString();
-    if (TestArenaPolicy::IsArena(DojoProbe::ObjectPath(world), hunt,
-        DojoProbe::ObjectPath(world->GameState->GameModeClass.Get()))) return true;
-    if (FrostHuntConfig::IsDedicatedWorld(world) || ThunderdeepHuntConfig::IsDedicatedWorld(world)
-        || (DojoProbe::FrostHuntEnabled() && hunt == "CR19_MatchmakerHunt_Beaver")) return true;
+    if (TestArenaPolicy::IsArena(FeatureSupport::ObjectPath(world), hunt,
+        FeatureSupport::ObjectPath(world->GameState->GameModeClass.Get()))) return true;
+    if (FrostHuntConfig::IsDedicatedWorld(world) || ThunderdeepHuntConfig::IsDedicatedWorld(world)) return true;
     // The open Trials prototype has no pursuit ID or hunt-results exit. Keep
     // the native return available even after its manually spawned target dies.
     // Replicated mode + exact world scope exclude cities and ordinary hunts.
     auto* mode = world->GameState->GameModeClass.Get();
-    return !DojoProbe::FrostHuntEnabled() && (hunt.empty() || hunt == "None")
-        && DojoProbe::ObjectPath(world) == "/Game/Maps/islands/arenas/arena_ramsgate_00.arena_ramsgate_00"
-        && mode && DojoProbe::ObjectPath(mode) == "/Game/Blueprints/BPGM_Archon_Prototype.BPGM_Archon_Prototype_C";
+    return (hunt.empty() || hunt == "None")
+        && FeatureSupport::ObjectPath(world) == "/Game/Maps/islands/arenas/arena_ramsgate_00.arena_ramsgate_00"
+        && mode && FeatureSupport::ObjectPath(mode) == "/Game/Blueprints/BPGM_Archon_Prototype.BPGM_Archon_Prototype_C";
 }
 inline void ClearTravel(const char* reason) {
     if (PendingTravel.World) Log("\"event\":\"confirmed_return_cleared\",\"confirmationId\":" + std::to_string(PendingTravel.Id)
-        + ",\"reason\":" + DojoProbe::Json(reason));
+        + ",\"reason\":" + FeatureSupport::Json(reason));
     PendingTravel = {};
 }
 inline std::string ObjectPath(UObject* object) {
@@ -137,12 +136,12 @@ inline std::string FeatureState(UWorld* world, UObject* context, UClass* type) {
     auto* base = UObject::FindClassFast("ArchonFeature");
     auto* object = type->ClassDefaultObject;
     auto* feature = object && base && object->IsA(base) ? static_cast<UArchonFeature*>(object) : nullptr;
-    return "{\"available\":true,\"class\":" + DojoProbe::Json(ObjectPath(type))
-        + ",\"cdoEnabled\":" + DojoProbe::Bool(feature && feature->bEnabled)
-        + ",\"local\":" + DojoProbe::Bool(local)
-        + ",\"world\":" + DojoProbe::Bool(UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabled(world, type))
-        + ",\"worldContext\":" + DojoProbe::Bool(UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabledWorldContext(world, type))
-        + ",\"itemContext\":" + DojoProbe::Bool(UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabled(context, type)) + '}';
+    return "{\"available\":true,\"class\":" + FeatureSupport::Json(ObjectPath(type))
+        + ",\"cdoEnabled\":" + FeatureSupport::Bool(feature && feature->bEnabled)
+        + ",\"local\":" + FeatureSupport::Bool(local)
+        + ",\"world\":" + FeatureSupport::Bool(UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabled(world, type))
+        + ",\"worldContext\":" + FeatureSupport::Bool(UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabledWorldContext(world, type))
+        + ",\"itemContext\":" + FeatureSupport::Bool(UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabled(context, type)) + '}';
 }
 inline bool __fastcall ReturnInitialize(UMainMenuReturnToRamsgateItemViewModel* item, AArchonPlayerController* player) {
     const bool initialized = OriginalReturnInitialize(item, player);
@@ -174,8 +173,8 @@ inline bool __fastcall ReturnInitialize(UMainMenuReturnToRamsgateItemViewModel* 
     item->bShowInUI = true;
     if (ReturnBindings.size() >= 16) ReturnBindings.clear();
     ReturnBindings[item->Index] = {item, player, player->Index, world};
-    Log("\"event\":\"return_item_initialized\",\"map\":" + DojoProbe::Json(world->GetName())
-        + ",\"itemIndex\":" + std::to_string(item->Index) + ",\"nativeShow\":" + DojoProbe::Bool(nativeShow)
+    Log("\"event\":\"return_item_initialized\",\"map\":" + FeatureSupport::Json(world->GetName())
+        + ",\"itemIndex\":" + std::to_string(item->Index) + ",\"nativeShow\":" + FeatureSupport::Bool(nativeShow)
         + ",\"show\":true,\"feature\":" + FeatureState(world, item, featureType));
     return initialized;
 }
@@ -211,7 +210,7 @@ inline void __fastcall ReturnConfirmed(UMainMenuReturnToRamsgateItemViewModel* i
     PendingTravel.Id = ++NextConfirmationId; PendingTravel.Deadline = GetTickCount64() + 45000;
     PendingTravel.SawIncomplete = !completed;
     Log("\"event\":\"confirmed_return_armed\",\"confirmationId\":" + std::to_string(PendingTravel.Id)
-        + ",\"completedAfterCallback\":" + DojoProbe::Bool(completed)
+        + ",\"completedAfterCallback\":" + FeatureSupport::Bool(completed)
         + ",\"requiresFreshCompletion\":true");
 }
 inline void __fastcall CancelMatchmaking(AArchonPartyClient* party) {
@@ -257,7 +256,7 @@ inline void TickTravel(UWorld* world) {
 // Called once from the isolated client hook setup, after MH_Initialize.
 inline bool Install(uintptr_t base) {
     if (ReturnHookInstalled) return true;
-    if (!DojoProbe::IsExpectedProcess() || std::wstring(GetCommandLineW()).find(L"-server") != std::wstring::npos) return false;
+    if (!FeatureSupport::IsExpectedProcess() || std::wstring(GetCommandLineW()).find(L"-server") != std::wstring::npos) return false;
     // Independently traced from the stock MainMenuReturnToRamsgateItemViewModel
     // vtable (virtual slot 0x260), its diagnostic name and .pdata boundaries.
     constexpr uintptr_t rva = 0x18DF100;
@@ -305,7 +304,7 @@ inline bool Install(uintptr_t base) {
 }
 inline std::string RootTableState(UWorld* world, UMainMenuViewModel* model) {
     auto* table = model->RootPanelData;
-    std::string result = "{\"path\":" + DojoProbe::Json(ObjectPath(table));
+    std::string result = "{\"path\":" + FeatureSupport::Json(ObjectPath(table));
     if (!table || !table->RowStruct || table->RowStruct->GetName() != "MainMenuItemData")
         return result + ",\"validRowStruct\":false}";
     const auto allocated = table->RowMap.NumAllocated();
@@ -318,18 +317,18 @@ inline std::string RootTableState(UWorld* world, UMainMenuViewModel* model) {
         if (!row || row->TelemetryID.ToString() != "return_ramsgate") continue;
         if (!first) result += ',';
         first = false;
-        result += "{\"rowName\":" + DojoProbe::Json(table->RowMap[index].Key().ToString())
-            + ",\"show\":" + DojoProbe::Bool(row->bShowInUI)
-            + ",\"showDuringTutorial\":" + DojoProbe::Bool(row->bShowDuringTutorial)
-            + ",\"disableDuringHunts\":" + DojoProbe::Bool(row->bDisableDuringHunts)
-            + ",\"viewModelClass\":" + DojoProbe::Json(ObjectPath(row->ViewModelClassOverride))
+        result += "{\"rowName\":" + FeatureSupport::Json(table->RowMap[index].Key().ToString())
+            + ",\"show\":" + FeatureSupport::Bool(row->bShowInUI)
+            + ",\"showDuringTutorial\":" + FeatureSupport::Bool(row->bShowDuringTutorial)
+            + ",\"disableDuringHunts\":" + FeatureSupport::Bool(row->bDisableDuringHunts)
+            + ",\"viewModelClass\":" + FeatureSupport::Json(ObjectPath(row->ViewModelClassOverride))
             + ",\"requiredFeatures\":[";
         const auto flags = row->RequiredFeatureFlags.NumAllocated();
         bool firstFlag = true;
         if (flags >= 0 && flags <= 16) for (int32 flag = 0; flag < flags; ++flag) if (row->RequiredFeatureFlags.IsValidIndex(flag)) {
             if (!firstFlag) result += ',';
             firstFlag = false;
-            result += "{\"expected\":" + std::string(DojoProbe::Bool(row->RequiredFeatureFlags[flag].Value()))
+            result += "{\"expected\":" + std::string(FeatureSupport::Bool(row->RequiredFeatureFlags[flag].Value()))
                 + ",\"state\":" + FeatureState(world, model, row->RequiredFeatureFlags[flag].Key()) + '}';
         }
         result += "]}";
@@ -348,9 +347,9 @@ inline std::string FilteredReturnState(UWorld* world, UMainMenuViewModel* model)
         if (!object || object->Outer != model || !object->IsA(type) || object->IsDefaultObject()) continue;
         auto* item = static_cast<UMainMenuItemViewModel*>(object);
         if (count++) result += ',';
-        result += "{\"class\":" + DojoProbe::Json(item->Class->GetName())
-            + ",\"show\":" + DojoProbe::Bool(item->bShowInUI) + ",\"locked\":" + DojoProbe::Bool(item->bIsLocked)
-            + ",\"rowShow\":" + DojoProbe::Bool(item->ItemData.bShowInUI)
+        result += "{\"class\":" + FeatureSupport::Json(item->Class->GetName())
+            + ",\"show\":" + FeatureSupport::Bool(item->bShowInUI) + ",\"locked\":" + FeatureSupport::Bool(item->bIsLocked)
+            + ",\"rowShow\":" + FeatureSupport::Bool(item->ItemData.bShowInUI)
             + ",\"feature\":" + FeatureState(world, item, featureType) + '}';
     }
     return result + ']';
@@ -367,7 +366,7 @@ inline void MenuDiagnostics(UWorld* world) {
     auto* itemType = UObject::FindClassFast("MainMenuItemViewModel");
     auto* libraryType = UObject::FindClassFast("WidgetBlueprintLibrary");
     auto* library = libraryType ? libraryType->ClassDefaultObject : nullptr;
-    auto* function = DojoProbe::FindFunction(library, "GetAllWidgetsOfClass");
+    auto* function = FeatureSupport::FindFunction(library, "GetAllWidgetsOfClass");
     if (!screenType || !itemType || !library || !function) return;
     Params::WidgetBlueprintLibrary_GetAllWidgetsOfClass query{};
     query.WorldContextObject = world; query.WidgetClass = screenType; query.TopLevelOnly = false;
@@ -375,7 +374,7 @@ inline void MenuDiagnostics(UWorld* world) {
     if (query.FoundWidgets.Num() < 0 || query.FoundWidgets.Num() > 16) return;
     if (LastMenuScreenCount != query.FoundWidgets.Num()) {
         LastMenuScreenCount = query.FoundWidgets.Num();
-        Log("\"event\":\"main_menu_screens\",\"map\":" + DojoProbe::Json(map)
+        Log("\"event\":\"main_menu_screens\",\"map\":" + FeatureSupport::Json(map)
             + ",\"screenCount\":" + std::to_string(LastMenuScreenCount));
     }
     static const std::set<std::string> canonicalIds = {
@@ -397,15 +396,15 @@ inline void MenuDiagnostics(UWorld* world) {
             if (!first) rows += ',';
             first = false;
             hasReturn = hasReturn || id == "return_ramsgate";
-            rows += "{\"telemetryId\":" + DojoProbe::Json(id) + ",\"class\":" + DojoProbe::Json(item->Class->GetName())
-                + ",\"show\":" + DojoProbe::Bool(item->bShowInUI) + ",\"locked\":" + DojoProbe::Bool(item->bIsLocked) + '}';
+            rows += "{\"telemetryId\":" + FeatureSupport::Json(id) + ",\"class\":" + FeatureSupport::Json(item->Class->GetName())
+                + ",\"show\":" + FeatureSupport::Bool(item->bShowInUI) + ",\"locked\":" + FeatureSupport::Bool(item->bIsLocked) + '}';
         }
         rows += ']';
-        const auto snapshot = "\"screenClass\":" + DojoProbe::Json(screen->Class->GetName())
-            + ",\"modelClass\":" + DojoProbe::Json(model->Class->GetName())
+        const auto snapshot = "\"screenClass\":" + FeatureSupport::Json(screen->Class->GetName())
+            + ",\"modelClass\":" + FeatureSupport::Json(model->Class->GetName())
             + ",\"menuListCount\":" + std::to_string(model->MenuItemViewModels.Num())
-            + ",\"inHunt\":" + DojoProbe::Bool(model->bIsInAHunt) + ",\"tutorial\":" + DojoProbe::Bool(model->bIsInTutorial)
-            + ",\"hasReturnRow\":" + DojoProbe::Bool(hasReturn) + ",\"skippedNoncanonicalRows\":" + std::to_string(skipped)
+            + ",\"inHunt\":" + FeatureSupport::Bool(model->bIsInAHunt) + ",\"tutorial\":" + FeatureSupport::Bool(model->bIsInTutorial)
+            + ",\"hasReturnRow\":" + FeatureSupport::Bool(hasReturn) + ",\"skippedNoncanonicalRows\":" + std::to_string(skipped)
             + ",\"returnFeature\":" + FeatureState(world, model, UObject::FindClassFast("ReturnToRamsgateFeature"))
             + ",\"rootPanelData\":" + RootTableState(world, model)
             + ",\"filteredReturnItems\":" + FilteredReturnState(world, model)
@@ -414,7 +413,7 @@ inline void MenuDiagnostics(UWorld* world) {
         if (previous != MenuSnapshots.end() && previous->second == snapshot) continue;
         if (MenuSnapshots.size() >= 16 && previous == MenuSnapshots.end()) continue;
         MenuSnapshots[model->Index] = snapshot;
-        Log("\"event\":\"main_menu_model\",\"map\":" + DojoProbe::Json(map)
+        Log("\"event\":\"main_menu_model\",\"map\":" + FeatureSupport::Json(map)
             + ",\"modelIndex\":" + std::to_string(model->Index) + ',' + snapshot);
     }
 }
@@ -424,7 +423,7 @@ inline void MenuDiagnostics(UWorld* world) {
 // for this isolated client lifetime, including its city/menu construction.
 // The regular native menu, confirmation and matchmaking still perform the return.
 inline void Tick(UWorld* world) {
-    if (!DojoProbe::IsExpectedProcess() || std::wstring(GetCommandLineW()).find(L"-server") != std::wstring::npos || !world) return;
+    if (!FeatureSupport::IsExpectedProcess() || std::wstring(GetCommandLineW()).find(L"-server") != std::wstring::npos || !world) return;
     TickTravel(world);
     MenuDiagnostics(world);
     if (Active || FailedWorld == world || GetTickCount64() < NextPoll) return;
@@ -460,11 +459,11 @@ inline void Tick(UWorld* world) {
     Active = true;
     const bool after = UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabled(world, type);
     const bool worldContextAfter = UArchonFeatureFlagBlueprintLibrary::IsFeatureEnabledWorldContext(world, type);
-    Log("\"event\":\"native_return_feature_enabled\",\"map\":" + DojoProbe::Json(world->GetName())
-        + ",\"earlyLabClient\":true,\"localBefore\":" + DojoProbe::Bool(localBefore)
-        + ",\"before\":" + DojoProbe::Bool(before) + ",\"after\":" + DojoProbe::Bool(after)
-        + ",\"worldContextAfter\":" + DojoProbe::Bool(worldContextAfter)
-        + ",\"originalEnabled\":" + DojoProbe::Bool(OriginalEnabled)
+    Log("\"event\":\"native_return_feature_enabled\",\"map\":" + FeatureSupport::Json(world->GetName())
+        + ",\"earlyLabClient\":true,\"localBefore\":" + FeatureSupport::Bool(localBefore)
+        + ",\"before\":" + FeatureSupport::Bool(before) + ",\"after\":" + FeatureSupport::Bool(after)
+        + ",\"worldContextAfter\":" + FeatureSupport::Bool(worldContextAfter)
+        + ",\"originalEnabled\":" + FeatureSupport::Bool(OriginalEnabled)
         + ",\"branchOverrides\":" + std::to_string(OriginalBranches.size())
         + ",\"environmentOverrides\":" + std::to_string(OriginalEnvironments.size()));
 }

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
-#include "DojoProbe.h"
+#include "FeatureSupport.h"
 #include "FrostHuntConfig.h"
 
 namespace FrostLootCompat {
@@ -20,13 +20,13 @@ inline std::string Lower(std::string value) {
 }
 inline void Log(const std::string& body) {
     if (++EventCount > 256) return;
-    std::ofstream out(std::filesystem::path(DojoProbe::Root()) / L"reports/frost-loot-compat.jsonl", std::ios::app);
+    std::ofstream out(std::filesystem::path(FeatureSupport::Root()) / L"reports/frost-loot-compat.jsonl", std::ios::app);
     out << "{\"pid\":" << GetCurrentProcessId() << ",\"uptimeMs\":" << GetTickCount64()
         << ",\"port\":" << ActivePort << ',' << body << "}\n";
 }
 // Deliberately reread on the 500 ms engine-tick schedule. Absent/malformed means off.
 inline bool ReadEnabled() {
-    const auto path = std::filesystem::path(DojoProbe::Root()) / L"data/frost-loot-compat.ini";
+    const auto path = std::filesystem::path(FeatureSupport::Root()) / L"data/frost-loot-compat.ini";
     std::error_code ec;
     const auto size = std::filesystem::file_size(path, ec);
     if (ec || size > 4096) return false;
@@ -34,19 +34,17 @@ inline bool ReadEnabled() {
     std::string line;
     while (std::getline(input, line)) {
         const auto split = line.find('=');
-        if (split != std::string::npos && DojoProbe::Trim(line.substr(0, split)) == "Enabled")
-            return DojoProbe::Trim(line.substr(split + 1)) == "1";
+        if (split != std::string::npos && FeatureSupport::Trim(line.substr(0, split)) == "Enabled")
+            return FeatureSupport::Trim(line.substr(split + 1)) == "1";
     }
     return false;
 }
 inline bool AllowedWorld(UWorld* world, UNetDriver* driver, int port) {
-    if (!DojoProbe::IsExpectedProcess() || !world || !driver || driver->World != world
+    if (!FeatureSupport::IsExpectedProcess() || !world || !driver || driver->World != world
         || world->NetDriver != driver || driver->ServerConnection || !world->AuthorityGameMode
         || !world->AuthorityGameMode->HasAuthority() || !world->AuthorityGameMode->Class
         || world->AuthorityGameMode->Class->GetName() != "BPGM_Archon_Prototype_C") return false;
-    return FrostHuntConfig::IsDedicatedServer(world, port)
-        || (port == HuntPortPolicy::TrainingGrounds() && DojoProbe::FrostHuntEnabled()
-            && (world->GetName() == "arena_ramsgate_00" || world->GetName() == "dia_moss_triforce"));
+    return FrostHuntConfig::IsDedicatedServer(world, port);
 }
 inline FName* NameMember(UObject* object, const char* name, int& offset) {
     unsigned depth = 0, fields = 0;
@@ -63,7 +61,7 @@ inline FName* NameMember(UObject* object, const char* name, int& offset) {
     return nullptr;
 }
 inline std::string ResolvedLootName(UObject* object) {
-    auto* function = DojoProbe::FindFunction(object, "GetBehemothLootName");
+    auto* function = FeatureSupport::FindFunction(object, "GetBehemothLootName");
     if (!function) return "null";
     unsigned parameters = 0, fields = 0;
     bool valid = true;
@@ -80,14 +78,14 @@ inline std::string ResolvedLootName(UObject* object) {
     if (!valid || parameters != 2 || fields > 2048) return "null";
     struct { FName ArchetypeName, ClassificationName; } result{};
     object->ProcessEvent(function, &result);
-    return "{\"archetype\":" + DojoProbe::Json(result.ArchetypeName.ToString())
-        + ",\"classification\":" + DojoProbe::Json(result.ClassificationName.ToString()) + "}";
+    return "{\"archetype\":" + FeatureSupport::Json(result.ArchetypeName.ToString())
+        + ",\"classification\":" + FeatureSupport::Json(result.ClassificationName.ToString()) + "}";
 }
 // Root calls BEFORE FrostRewardProbe::TickServer on the existing engine thread.
 // No CDO, combat classification, loot table, quantity, health, damage or grant is changed.
 // Turning the marker off prevents future edits; it does not rewrite an already adapted actor.
 inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
-    if (!DojoProbe::IsExpectedProcess()) return;
+    if (!FeatureSupport::IsExpectedProcess()) return;
     const auto now = GetTickCount64();
     if (now < NextPoll) return;
     NextPoll = now + 500;
@@ -95,7 +93,7 @@ inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
     const bool enabled = ReadEnabled();
     if (!ConfigReported || enabled != LastEnabled) {
         ConfigReported = true; LastEnabled = enabled;
-        Log("\"event\":\"configuration\",\"enabled\":" + std::string(DojoProbe::Bool(enabled)));
+        Log("\"event\":\"configuration\",\"enabled\":" + std::string(FeatureSupport::Bool(enabled)));
     }
     if (LastWorld != world) { LastWorld = world; Processed.clear(); }
     if (!enabled || !AllowedWorld(world, driver, port)) return;
@@ -105,7 +103,7 @@ inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
     unsigned count = 0;
     for (auto* actor : actors) {
         if (!actor || !actor->Class || actor->IsActorBeingDestroyed() || !actor->HasAuthority()
-            || DojoProbe::ObjectPath(actor->Class) != FrostHuntConfig::MonsterPath || ++count > 4) continue;
+            || FeatureSupport::ObjectPath(actor->Class) != FrostHuntConfig::MonsterPath || ++count > 4) continue;
         const auto found = Processed.find(actor);
         if (found != Processed.end() && found->second == actor->Index) continue;
         Processed[actor] = actor->Index;
@@ -121,7 +119,7 @@ inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
         const auto normalizedBefore = Lower(before);
         if (normalizedBefore != "none" && normalizedBefore != "frost" && normalizedBefore != "normal") {
             Log("\"event\":\"rejected\",\"actorIndex\":" + std::to_string(actor->Index)
-                + ",\"reason\":\"unexpected_existing_loot_override\",\"before\":" + DojoProbe::Json(before));
+                + ",\"reason\":\"unexpected_existing_loot_override\",\"before\":" + FeatureSupport::Json(before));
             continue;
         }
         const auto resolvedBefore = ResolvedLootName(actor);
@@ -131,10 +129,10 @@ inline void TickServer(UWorld* world, UNetDriver* driver, int port) {
         if (edited) *overrideName = normal;
         const auto resolvedAfter = ResolvedLootName(actor);
         Log("\"event\":\"actor_loot_override\",\"actorIndex\":" + std::to_string(actor->Index)
-            + ",\"edited\":" + DojoProbe::Bool(edited) + ",\"fieldOffset\":" + std::to_string(overrideOffset)
-            + ",\"before\":" + DojoProbe::Json(before) + ",\"after\":" + DojoProbe::Json(overrideName->ToString())
-            + ",\"combatClassificationBefore\":" + DojoProbe::Json(actualClassification)
-            + ",\"combatClassificationAfter\":" + DojoProbe::Json(classification->ToString())
+            + ",\"edited\":" + FeatureSupport::Bool(edited) + ",\"fieldOffset\":" + std::to_string(overrideOffset)
+            + ",\"before\":" + FeatureSupport::Json(before) + ",\"after\":" + FeatureSupport::Json(overrideName->ToString())
+            + ",\"combatClassificationBefore\":" + FeatureSupport::Json(actualClassification)
+            + ",\"combatClassificationAfter\":" + FeatureSupport::Json(classification->ToString())
             + ",\"resolvedBefore\":" + resolvedBefore + ",\"resolvedAfter\":" + resolvedAfter);
     }
 }
