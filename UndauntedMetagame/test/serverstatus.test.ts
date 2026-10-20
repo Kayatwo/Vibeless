@@ -1,11 +1,14 @@
 import { RemoveTestDb } from "./setup";
 import { FAKE_DEPLOYSERVER_PORT } from "./statusenv";
 import "./authenv";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { GetDb } from "../src/db";
 import { userapikeys, users } from "../src/db/schema";
-import { BehemothName, BuildLimitedServerStatus, BuildServerStatus, ClassifyPlace, ClearServerStatusCache, GetServerIdentity, GetServerStatus, InstanceTitle } from "../src/controllers/serverstatus";
+import { BehemothName, LoadHuntTitles, BuildLimitedServerStatus, BuildServerStatus, ClassifyPlace, ClearServerStatusCache, GetServerIdentity, GetServerStatus, InstanceTitle } from "../src/controllers/serverstatus";
 import { GetOnlinePlayerActivity, UpdatePlayerActivity } from "../src/controllers/undauntedapi";
 import { HandlePlayerMatchmaking } from "../src/controllers/matchmaking";
 import { HashUserAPIKey, SignMetagameJWTForUid } from "../src/controllers/auth";
@@ -326,4 +329,27 @@ it("attributes multiple Ramsgates by the player's allocated port", async () => {
     assert.equal(SelectPersistentInstance([main,worker],8777),main);
     assert.equal(SelectPersistentInstance([main,worker],undefined),main);
     assert.equal(SelectPersistentInstance([],8761),undefined);
+});
+
+// Vibeless: package hunt names come from a profile's composed tables.
+describe("LoadHuntTitles", () => {
+    it("uses the bundled 1.4.4 names without a composed directory", () => {
+        const Titles = LoadHuntTitles("");
+        assert.equal(Titles.matchmakerHunts.CR19_MatchmakerHunt_Beaver, "Gnasher");
+        assert.equal(Object.keys(Titles.playerHunts).some((Id) => /Thunderdeep144|Frost144|TestArena144/.test(Id)), false);
+    });
+    it("reads a composed file and refuses a missing or malformed one", () => {
+        const Dir = fs.mkdtempSync(path.join(os.tmpdir(), "dr-titles-"));
+        try {
+            assert.throws(() => LoadHuntTitles(Dir), /hunt_titles\.json could not be read/);
+            fs.mkdirSync(path.join(Dir, "metagame"));
+            const File = path.join(Dir, "metagame", "hunt_titles.json");
+            fs.writeFileSync(File, "\uFEFF" + JSON.stringify({ playerHunts: { P: "Pursuit" }, matchmakerHunts: { M: "Match" }, behemoths: {} }));
+            assert.equal(LoadHuntTitles(Dir).matchmakerHunts.M, "Match");
+            fs.writeFileSync(File, JSON.stringify({ playerHunts: { P: 1 }, matchmakerHunts: {}, behemoths: {} }));
+            assert.throws(() => LoadHuntTitles(Dir), /playerHunts must map IDs to names/);
+        } finally {
+            fs.rmSync(Dir, { recursive: true, force: true });
+        }
+    });
 });

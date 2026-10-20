@@ -27,9 +27,8 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
 
 1. `TArray` allocation hardening, SDK delegate assert fix, crash-report script frames, array tests.
 2. Backport native features from the installed release: shared creature services, Deepfrost
-   Gnasher, Thunderdeep Drask, Test Arena, opt-in reward diagnostics and parked development
-   probes (compiled out). Lab-specific paths are still present and are being replaced by
-   configuration.
+   Gnasher, Thunderdeep Drask, Test Arena and opt-in reward diagnostics. The parked development
+   probes and the developer arena were retired in Phase 2 (decision D10); they remain in history.
 3. Deploy/metagame TypeScript reproducing the installed JavaScript snapshots (see
    Reconciliation below).
 4. Overspend refusal on by default; `INVENTORY_REFUSE_OVERSPEND=0` restores upstream clamping.
@@ -43,6 +42,16 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
    that no feature markers remain.
 10. Foundation bundle: `tools/vibeless/make-foundation-bundle.mjs`, built by the CI job "Vibeless
     foundation bundle" and kept as the `vibeless-foundation` artifact for 7 days.
+11. Feature host (`FeatureHost.h`, `VibelessFeatures.h`, Phase 2): the core claims every detour,
+    so no two owners can hook one function; native features subscribe to lifecycle events (client
+    tick, server tick, ProcessEvent intercept/before/after) and run only when enabled by
+    `DR_FEATURES`. Each process writes `<profile>/reports/runtime-client.json` or
+    `runtime-server-<port>.json` listing every feature's state and reason, every hook and its
+    owner, and any errors.
+12. Hunt tables by composition (Phase 2): the bundled deploy and metagame tables are upstream's
+    1.4.4 tables again, plus an empty `hunt_rules.json`. Packages add their hunts, names and session
+    rules (for example the Test Arena's one-player, no-behemoth session) through composed tables
+    that `DR_TABLES_DIR` points to; the former Test Arena branch in `gameservers.ts` is gone.
 
 ## Verification status (2026-10-19)
 
@@ -76,6 +85,13 @@ behaviour.
 | `DR_AUTO_PRESS_START` | client | on/off | on |
 | `DR_DUALSENSE` | client | on/off | on |
 | `INVENTORY_REFUSE_OVERSPEND` | metagame | `0` restores upstream clamping | refuse |
+| `DR_FEATURES` | client, game servers (same value) | `none`, or native feature IDs (`hunt-services`, `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes`), comma or space separated; required features are added | every feature except `reward-probes` |
+| `DR_TABLES_DIR` | deploy, metagame | folder of composed tables (`deploy/player_hunts_table.json`, `deploy/matchmaker_hunts_table.json`, `deploy/hunt_rules.json`, `metagame/hunt_titles.json`); all must be present | bundled 1.4.4 tables |
+
+Packages name the native features they need as capabilities (`native-feature:deepfrost`); the
+launcher turns the enabled packages into `DR_FEATURES` and composes their tables into
+`DR_TABLES_DIR`. Without a composed folder only the stock 1.4.4 hunts exist, so a profile that
+enables a backport package must set both.
 
 The upstream variables (for example `DR_SERVER_MAX_FPS`, `DR_RAMSGATE_POOL`, the metagame's
 `STORE*` switches) keep their documented meaning. The Trials schedule rewrite is not a setting:

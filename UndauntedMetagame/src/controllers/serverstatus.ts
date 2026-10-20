@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { inArray } from "drizzle-orm";
-import HuntTitles from "../vendor/hunt_titles.json";
+import BundledHuntTitles from "../vendor/hunt_titles.json";
 import { GetDb } from "../db";
 import { users } from "../db/schema";
 import { logger } from "../logger";
@@ -255,7 +255,28 @@ export async function FetchGameservers(): Promise<DeployGameserver[]> {
 // ---- Names ----
 
 type TitleTable = { playerHunts: Record<string, string>, matchmakerHunts: Record<string, string>, behemoths: Record<string, string> };
-const Titles = HuntTitles as unknown as TitleTable;
+// Vibeless: a profile's composed tables (DR_TABLES_DIR/metagame/hunt_titles.json) add the names of
+// package hunts; without DR_TABLES_DIR the bundled 1.4.4 names apply. A composed file that is
+// missing or malformed stops the metagame at start with its path.
+export function LoadHuntTitles(Directory = process.env.DR_TABLES_DIR): TitleTable {
+    if (!Directory) return BundledHuntTitles as unknown as TitleTable;
+    const File = path.join(Directory, "metagame", "hunt_titles.json");
+    let Value: any;
+    try {
+        Value = JSON.parse(fs.readFileSync(File, "utf8").replace(/^\uFEFF/, ""));
+    } catch (error) {
+        throw new Error(`Composed table ${File} could not be read: ${(error as Error).message}`);
+    }
+    for (const Section of ["playerHunts", "matchmakerHunts", "behemoths"] as const) {
+        const Entries = Value?.[Section];
+        if (!Entries || typeof Entries !== "object" || Array.isArray(Entries)
+            || Object.values(Entries).some((Name) => typeof Name !== "string")) {
+            throw new Error(`Composed table ${File}: ${Section} must map IDs to names`);
+        }
+    }
+    return Value as TitleTable;
+}
+const Titles = LoadHuntTitles();
 
 function Lookup(Table: Record<string, string>, Key: string | null | undefined){
     return Key != undefined && Object.prototype.hasOwnProperty.call(Table, Key) ? Table[Key] : undefined;

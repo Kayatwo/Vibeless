@@ -11,8 +11,7 @@ import { IsUdpPortBound, WaitForServerReady } from "./readiness";
 
 import crypto from "node:crypto";
 
-import PlayerHuntTable from "../vendor/player_hunts_table.json";
-import MatchmakerHuntTable from "../vendor/matchmaker_hunts_table.json";
+import { HuntRuleFor, HuntTables } from "./hunttables";
 import TrialsHardHuntTable from "../vendor/trials_hard_table.json";
 import TrialsEliteHuntTable from "../vendor/trials_elite_table.json";
 import TrialsPool from "../vendor/trials_pool.json";
@@ -515,7 +514,7 @@ export async function StartupGameserverWithArgs(GameArgs: string){
 }
 
 function GetMatchmakerHuntIdFromPlayerHuntId(PlayerHuntId: string){
-    const MatchmakerHuntIDs = (PlayerHuntTable[0].Rows as any)[PlayerHuntId].MatchmakerHuntIDs;
+    const MatchmakerHuntIDs = (HuntTables().PlayerHunts[0].Rows as any)[PlayerHuntId].MatchmakerHuntIDs;
 
     let MatchmakerHuntObject;
 
@@ -527,13 +526,13 @@ function GetMatchmakerHuntIdFromPlayerHuntId(PlayerHuntId: string){
 }
 
 function GetBehemothPathFromMatchmakerHuntId(MatchmakerHuntId: string): string{
-    const MatchmakerHuntObject = (MatchmakerHuntTable[0].Rows as any)[MatchmakerHuntId];
+    const MatchmakerHuntObject = (HuntTables().MatchmakerHunts[0].Rows as any)[MatchmakerHuntId];
 
     return MatchmakerHuntObject.SpecificBehemoth.BehemothAsset.AssetPathName;
 }
 
 function GetMapPathFromMatchmakerHuntId(MatchmakerHuntId: string): string{
-    const MatchmakerHuntObject = (MatchmakerHuntTable[0].Rows as any)[MatchmakerHuntId];
+    const MatchmakerHuntObject = (HuntTables().MatchmakerHunts[0].Rows as any)[MatchmakerHuntId];
 
     const MapList = MatchmakerHuntObject.MapList;
 
@@ -541,7 +540,7 @@ function GetMapPathFromMatchmakerHuntId(MatchmakerHuntId: string): string{
 }
 
 function GetGameModeOverrideFromMatchmakerHuntId(MatchmakerHuntId: string): string{
-    const MatchmakerHuntObject = (MatchmakerHuntTable[0].Rows as any)[MatchmakerHuntId];
+    const MatchmakerHuntObject = (HuntTables().MatchmakerHunts[0].Rows as any)[MatchmakerHuntId];
 
     return MatchmakerHuntObject.GameModeOverride.replaceAll("Archon/Content", "/Game");
 }
@@ -658,14 +657,16 @@ export function GetTrialsData(IsElite: boolean, At: Date = new Date()): TrialsDa
 }
 
 export async function StartupGameserverWithHuntIdAndPlayers(HuntId: string, ExpectedPlayers: string[]){
-    const IsTestArena = HuntId === "TestArena144_PlayerHunt";
-    if (IsTestArena && (!Array.isArray(ExpectedPlayers) || ExpectedPlayers.length !== 1))
-        throw new Error("Test Arena accepts one player per private session");
+    // Vibeless: packages give their hunts session rules (hunt_rules); stock hunts have none.
+    const Rule = HuntRuleFor(HuntId);
+    if (Rule?.MaxPlayers !== undefined && (!Array.isArray(ExpectedPlayers) || ExpectedPlayers.length < 1 || ExpectedPlayers.length > Rule.MaxPlayers))
+        throw new Error(Rule.MaxPlayers === 1 ? `${HuntId} accepts one player per private session`
+            : `${HuntId} accepts at most ${Rule.MaxPlayers} players per session`);
     const TrialsData = HuntId.startsWith("Arena_") ? GetTrialsData(HuntId.includes("Elite")) : undefined;
     const MatchmakerHuntId = TrialsData == undefined ? GetMatchmakerHuntIdFromPlayerHuntId(HuntId) : TrialsData.TrialsHuntId;
     let BehemothPath: string | undefined = TrialsData == undefined ? GetBehemothPathFromMatchmakerHuntId(MatchmakerHuntId!) : TrialsData.Behemoth;
     let MapPath = TrialsData == undefined ? GetMapPathFromMatchmakerHuntId(MatchmakerHuntId!) : TRIALS_MAP_PATH;
-    if (IsTestArena)
+    if (Rule?.Behemoth === "none")
         BehemothPath = undefined;
 
     if(MatchmakerHuntId != undefined && !MatchmakerHuntId.startsWith("Arena_")){
@@ -717,7 +718,7 @@ export function KindOfGameserver(Server: Gameserver): GameserverKind {
 }
 
 function MaxPlayersFromTables(MatchmakerHuntId: string){
-    const Row = (MatchmakerHuntTable[0].Rows as any)[MatchmakerHuntId]
+    const Row = (HuntTables().MatchmakerHunts[0].Rows as any)[MatchmakerHuntId]
         ?? (TrialsHardHuntTable[0].Rows as any)[MatchmakerHuntId]
         ?? (TrialsEliteHuntTable[0].Rows as any)[MatchmakerHuntId];
 
@@ -776,6 +777,11 @@ export function DescribeGameservers(Servers: Gameserver[] = Gameservers, IsAlive
 // Both persistent worlds start through the shared launch, so a player's request that arrives while
 // they are still starting waits for them instead of starting a second process
 export async function Startup(){
+    // Vibeless: read (and check) the hunt tables before anything starts, so a broken composition
+    // is reported at service start rather than on the first hunt.
+    const Tables = HuntTables();
+    logger.info(`Hunt tables: ${Tables.Source}, ${Object.keys(Tables.PlayerHunts[0].Rows).length} player hunts, ${Object.keys(Tables.Rules).length} hunt rules`);
+
     for(let i = PORT_RANGE_BEGIN; i <= PORT_RANGE_END - 2; i++){
         FreePorts.push(i);
     }
