@@ -50,28 +50,30 @@ using namespace SDK;
 #include "ProfileRoot.h"
 #include "HuntPortPolicy.h"
 
-// VIBELESS_FEATURES=0 builds the core-only 1.4.4 baseline: no backport creatures, Test Arena,
-// diagnostics probes or parked development code (Phase 0 audit, section 10).
+// VIBELESS_FEATURES=0 builds the core-only 1.4.4 baseline: no backport creatures, Test Arena
+// or diagnostics probes (Phase 0 audit, section 10). The parked development probes are retired (D10).
 #ifndef VIBELESS_FEATURES
 #define VIBELESS_FEATURES 1
 #endif
 #if VIBELESS_FEATURES
-#include "DojoProbe.h"
-#include "PortProbe.h"
 #include "FrostEncounter.h"
 #include "FrostReturn.h"
 #include "FrostRewardProbe.h"
 #include "FrostHunt.h"
 #include "FrostLootCompat.h"
-#include "DraskProbe.h"
-#include "EquipmentProbe.h"
 #include "DraskIcon.h"
 #include "ThunderdeepHunt.h"
 #include "DraskRewardProbe.h"
 #include "OriginalStrength.h"
 #include "HuntPresentation.h"
+#include "TestArena.h"
 #include "TestArenaMenu.h"
 #endif
+// Features reach the game only through the feature host's events (Phase 2).
+#include "VibelessFeatures.h"
+// Every core detour is claimed in the feature host, so a feature can never replace the same function.
+#define CORE_HOOK(rva, detour, original) \
+    Vibeless::Hook(Globals::BaseAddress, rva, reinterpret_cast<void*>(&detour), &original, #detour)
 
 static bool IsRunningUnderWine() {
     HMODULE Ntdll = GetModuleHandleW(L"ntdll.dll");
@@ -429,16 +431,6 @@ void* OrigGetDefaultMap = nullptr;
 FString* GetGameDefaultMap(FString* a1) {
     FString* Ret = reinterpret_cast<FString*(*)(FString*)>(OrigGetDefaultMap)(a1);
 
-    // The isolated development slot uses an explicit arena selection, without
-    // inheriting the stock Training Grounds hunt rules from its entry route.
-#if VIBELESS_FEATURES
-    if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766 && DojoProbe::IsExpectedProcess()) {
-        const std::wstring arenaURL = DojoProbe::ConfiguredMapURL();
-        *Ret = arenaURL.c_str();
-        return Ret;
-    }
-#endif
-
     const std::wstring FinalURL = DevelopmentAccessPolicy::StockMapURL(
         Globals::MapPath, Globals::BehemothPath, Globals::MatchmakerHuntId, Globals::ExpectedPlayerString);
     *Ret = FinalURL.c_str();
@@ -502,20 +494,14 @@ extern "C" {
 }
 
 void* OrigGameEngineTick = nullptr;
-#if VIBELESS_FEATURES
-void* OrigFrostClientEngineTick = nullptr;
-void FrostClientEngineTickHook(UGameEngine* engine, float deltaTime, char canRender) {
-    FrostReturn::Tick(UWorld::GetWorld());
-    reinterpret_cast<void(*)(UGameEngine*, float, char)>(OrigFrostClientEngineTick)(engine, deltaTime, canRender);
-    FrostReturn::Tick(UWorld::GetWorld());
-    FrostEncounter::TickClient(UWorld::GetWorld());
-    DraskIcon::Tick(UWorld::GetWorld());
-    FrostHunt::Tick(UWorld::GetWorld());
-    ThunderdeepHunt::Tick(UWorld::GetWorld());
-    TestArenaMenu::Tick(UWorld::GetWorld());
-    HuntPresentation::Tick(UWorld::GetWorld());
+// Installed in the client only when an enabled feature subscribes to a client tick event.
+void* OrigClientEngineTick = nullptr;
+void ClientEngineTickHook(UGameEngine* engine, float deltaTime, char canRender) {
+    const auto& features = Vibeless::Features();
+    features.ClientTickBefore({UWorld::GetWorld(), nullptr, 0, deltaTime});
+    reinterpret_cast<void(*)(UGameEngine*, float, char)>(OrigClientEngineTick)(engine, deltaTime, canRender);
+    features.ClientTickAfter({UWorld::GetWorld(), nullptr, 0, deltaTime});
 }
-#endif
 
 void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender) {
     // Network tick settings do not cap this injected per-frame replication loop.
@@ -553,23 +539,8 @@ void GameEngineTickHook(UGameEngine* GameEngine, float DeltaTime, char CanRender
         DR_TickStage = 2;
         const auto ReplicationStart = std::chrono::steady_clock::now();
         Networking::TickNetworking();
-#if VIBELESS_FEATURES
-        OriginalStrength::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
         // Networking restores this injected world's driver after the engine tick.
-        if (DevelopmentAccessPolicy::Enabled)
-            DojoProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-        FrostEncounter::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-        FrostLootCompat::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-        FrostRewardProbe::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-        DraskRewardProbe::TickServer(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-        FrostHunt::Tick(UWorld::GetWorld());
-        ThunderdeepHunt::Tick(UWorld::GetWorld());
-        if (DevelopmentAccessPolicy::Enabled) {
-            PortProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-            DraskProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-            EquipmentProbe::Tick(UWorld::GetWorld(), Networking::NetDriver, Globals::Port);
-        }
-#endif
+        Vibeless::Features().ServerTick({UWorld::GetWorld(), Networking::NetDriver, Globals::Port, DeltaTime});
         DR_ReplicationMicros += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - ReplicationStart).count();
         DR_TickStage = 3;
     }
@@ -877,14 +848,11 @@ static bool IsPotionPurchaseQuestOpen() {
 }
 
 void ProcessEventClientHook(UObject* Object, UFunction* Function, void* Parms) {
-#if VIBELESS_FEATURES
-    if (TestArenaMenu::BeforeEvent(Object, Function, Parms)) return;
-#endif
+    const auto& features = Vibeless::Features();
+    if (features.ClientIntercept({Object, Function, Parms})) return;
     RamsStorePilot::Scope RamsScope(Object, Function, Parms);
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEventClient)(Object, Function, Parms);
-#if VIBELESS_FEATURES
-    HuntPresentation::AfterEvent(Object, Function, Parms);
-#endif
+    features.ClientAfter({Object, Function, Parms});
 
     TrialsSchedule::Tick();
     CellFusionTime::Tick();
@@ -916,20 +884,10 @@ bool DidDoTravelReset = false;
 void* OrigProcessEvent = nullptr;
 
 void ProcessEventHook(UObject* Object, UFunction* Function, void* Parms) {
-    const char* eventLabel = nullptr;
-#if VIBELESS_FEATURES
-    if (TestArena::BeforeServerEvent(Object, Function, Parms, Networking::NetDriver)) return;
-    // Store class/function names before dispatch; the crash handler must not walk UE objects.
-    // No arguments, character names or account identifiers are retained.
-    static thread_local std::map<std::pair<UClass*, UFunction*>, std::string> EventLabels;
-    if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766 && Object && Object->Class && Function) {
-        auto [label, inserted] = EventLabels.try_emplace({Object->Class, Function});
-        if (inserted) label->second = "context=" + DojoProbe::ObjectPath(Object->Class)
-            + " function=" + Function->GetFullName();
-        eventLabel = label->second.c_str();
-    }
-#endif
-    DR_EventScope eventScope(eventLabel);
+    const auto& features = Vibeless::Features();
+    if (features.ServerIntercept({Object, Function, Parms})) return;
+    // Crash event labels were populated only by the retired development port (D10).
+    DR_EventScope eventScope(nullptr);
     // This hook is installed only in game servers. Never inspect RPC arguments
     // or infer bans from timing, movement corrections, or server-side calls.
     if (Function && (Function->FunctionFlags & static_cast<uint32_t>(EFunctionFlags::NetServer))) {
@@ -968,15 +926,9 @@ void ProcessEventHook(UObject* Object, UFunction* Function, void* Parms) {
         return;
     }
 
-#if VIBELESS_FEATURES
-    FrostRewardProbe::ObserveProcessEvent(Object, Function, Parms, false);
-    DraskRewardProbe::ObserveProcessEvent(Object, Function, Parms, false);
-#endif
+    features.ServerBeforeOriginal({Object, Function, Parms});
     reinterpret_cast<void(*)(UObject*, UFunction*, void*)>(OrigProcessEvent)(Object, Function, Parms);
-#if VIBELESS_FEATURES
-    FrostRewardProbe::ObserveProcessEvent(Object, Function, Parms, true);
-    DraskRewardProbe::ObserveProcessEvent(Object, Function, Parms, true);
-#endif
+    features.ServerAfter({Object, Function, Parms});
 }
 
 void* OrigConfigCacheIniGetString = nullptr;
@@ -1056,14 +1008,10 @@ void EACClientInitHook(void* a1) {
 
 void InitClientHooks() {
     MH_Initialize();
-#if VIBELESS_FEATURES
-    FrostReturn::Install(Globals::BaseAddress);
-    if (DojoProbe::IsExpectedProcess() && MH_CreateHook((void*)(Globals::BaseAddress + 0x3307100),
-        FrostClientEngineTickHook, &OrigFrostClientEngineTick) == MH_OK)
-        MH_EnableHook((void*)(Globals::BaseAddress + 0x3307100));
-#endif
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1D06D40), GetCommandLineHook, &OrigGetCommandLine);
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1D06D40));
+    Vibeless::StartFeatures(Globals::BaseAddress, FeatureHost::Side::Client);
+    if (Vibeless::Features().HasClientTick())
+        CORE_HOOK(0x3307100, ClientEngineTickHook, OrigClientEngineTick);
+    CORE_HOOK(0x1D06D40, GetCommandLineHook, OrigGetCommandLine);
     RamsStorePilot::Install(Globals::BaseAddress);
 
     if (FoundationSettings::DualSense()) {
@@ -1072,22 +1020,14 @@ void InitClientHooks() {
     }
 
 #if DR_SKIP_EAC_CLIENT_INIT
-    MH_CreateHook((void*)(Globals::BaseAddress + 0xEF2440), EACClientInitHook, &OrigEACClientInit);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0xEF2440));
+    CORE_HOOK(0xEF2440, EACClientInitHook, OrigEACClientInit);
 #endif
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1528000), HasFinishedLoadingHook, &OrigHasFinishedLoading);
+    CORE_HOOK(0x1528000, HasFinishedLoadingHook, OrigHasFinishedLoading);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1528000));
+    CORE_HOOK(0x1D09D50, ConfigCacheInitGetStringHook, OrigConfigCacheIniGetString);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1D09D50), ConfigCacheInitGetStringHook, &OrigConfigCacheIniGetString);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1D09D50));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x14F2A30), GetEscalationSeason, &OrigGetEscalationSeason);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x14F2A30));
+    CORE_HOOK(0x14F2A30, GetEscalationSeason, OrigGetEscalationSeason);
 
     //
 
@@ -1102,9 +1042,9 @@ void InitClientHooks() {
 
     //MH_EnableHook((void*)(Globals::BaseAddress + 0x347E110));
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1F61820), ProcessEventClientHook, &OrigProcessEventClient);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1F61820));
+    CORE_HOOK(0x1F61820, ProcessEventClientHook, OrigProcessEventClient);
+    // RamsStorePilot, StoreCategoryFix and DualSense (upstream) still install their own detours.
+    Vibeless::WriteReport(FeatureHost::Side::Client, 0);
 
    // MH_CreateHook((void*)(Globals::BaseAddress + 0x3077710), GetActorCallspace, &OrigGetActorCallspace);
 
@@ -1125,9 +1065,7 @@ int NetModeHook(void* a1) { //char __fastcall UArchonStaminaComponent_TryConsume
 
 void InitServerHooks() {
     MH_Initialize();
-#if VIBELESS_FEATURES
-    FrostRewardProbe::Install();
-#endif
+    Vibeless::StartFeatures(Globals::BaseAddress, FeatureHost::Side::Server);
     Networking::InitChannelTracking(Globals::BaseAddress);
 
     // SYSTEM and service accounts do not inherit a launcher-generated Game.ini.
@@ -1139,76 +1077,43 @@ void InitServerHooks() {
         const DWORD Length = GetEnvironmentVariableW(L"DR_METAGAME_ADDRESS", Address, 256);
         if (Length > 0 && Length < 256) Globals::MetagameAddress = Address;
     }
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1D09D50), ConfigCacheInitGetStringHook, &OrigConfigCacheIniGetString);
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1D09D50));
+    CORE_HOOK(0x1D09D50, ConfigCacheInitGetStringHook, OrigConfigCacheIniGetString);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x25A37C0), GetGameDefaultMap, &OrigGetDefaultMap);
+    CORE_HOOK(0x25A37C0, GetGameDefaultMap, OrigGetDefaultMap);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x25A37C0));
+    CORE_HOOK(0x1D06D40, GetCommandLineHook, OrigGetCommandLine);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1D06D40), GetCommandLineHook, &OrigGetCommandLine);
+    CORE_HOOK(0x2E4D7F0, ServerBootCrash, OrigServerBootCrash);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1D06D40));
+    CORE_HOOK(0x1658f90, EncounterableSetupHook, OrigEncounterableSetup);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x2E4D7F0), ServerBootCrash, &OrigServerBootCrash);
+    CORE_HOOK(0x3307100, GameEngineTickHook, OrigGameEngineTick);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x2E4D7F0));
+    CORE_HOOK(0x820120, FixupNetworkNotifyHook, OrigFixupNetworkNotify);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1658f90), EncounterableSetupHook, &OrigEncounterableSetup);
+    CORE_HOOK(0x28A76C0, ProcessRequest, OrigProcessRequest);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1658f90));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x3307100), GameEngineTickHook, &OrigGameEngineTick);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x3307100));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x820120), FixupNetworkNotifyHook, &OrigFixupNetworkNotify);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x820120));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x28A76C0), ProcessRequest, &OrigProcessRequest);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x28A76C0));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1390300), EncounterableSetupHook, &OrigEncounterableSetup); // TODO: Rename to combat text
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1390300));
+    CORE_HOOK(0x1390300, EncounterableSetupHook, OrigEncounterableSetup); // TODO: Rename to combat text
 
     //MH_CreateHook((void*)(Globals::BaseAddress + 0x3077710), GetActorCallspace, &OrigGetActorCallspace);
 
     //MH_EnableHook((void*)(Globals::BaseAddress + 0x3077710));
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x14B7460), PostLoginHook, &OrigPostLogin);
+    CORE_HOOK(0x14B7460, PostLoginHook, OrigPostLogin);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x14B7460));
+    CORE_HOOK(0x1528000, HasFinishedLoadingHook, OrigHasFinishedLoading);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1528000), HasFinishedLoadingHook, &OrigHasFinishedLoading);
+    CORE_HOOK(0x347E110, IsNetReadyHook, OrigIsNetReady);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1528000));
+    CORE_HOOK(0x3491720, SetReplicationDriverHook, OrigSetReplicationDriver);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x347E110), IsNetReadyHook, &OrigIsNetReady);
+    CORE_HOOK(0x3078AF0, GetNetDriverInternalHook, OrigGetNetDriverInternal);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x347E110));
+    CORE_HOOK(0x3458780, IsLevelInitForActorHook, OrigIsLevelInitForActor);
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x3491720), SetReplicationDriverHook, &OrigSetReplicationDriver);
+    CORE_HOOK(0x1368660, GetStartSpotHook, OrigGetStartSpot);
 
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x3491720));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x3078AF0), GetNetDriverInternalHook, &OrigGetNetDriverInternal);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x3078AF0));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x3458780), IsLevelInitForActorHook, &OrigIsLevelInitForActor);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x3458780));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1368660), GetStartSpotHook, &OrigGetStartSpot);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1368660));
-
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x1F61820), ProcessEventHook, &OrigProcessEvent);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x1F61820));
+    CORE_HOOK(0x1F61820, ProcessEventHook, OrigProcessEvent);
 
     //MH_CreateHook((void*)(Globals::BaseAddress + 0x35996D0), MakeDoDamageHook, &OrigMakeDoDamage);
 
@@ -1218,18 +1123,14 @@ void InitServerHooks() {
 
     //MH_EnableHook((void*)(Globals::BaseAddress + 0x137A800));
 
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x378BDA0), NetModeHook, &OrigNetModeHook);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x378BDA0));
+    CORE_HOOK(0x378BDA0, NetModeHook, OrigNetModeHook);
 
     //MH_CreateHook((void*)(Globals::BaseAddress + 0x1469E00), GetTrackProgress, &OrigGetTrackProgress);
 
    // MH_EnableHook((void*)(Globals::BaseAddress + 0x1469E00));
 
     
-    MH_CreateHook((void*)(Globals::BaseAddress + 0x14F2A30), GetEscalationSeason, &OrigGetEscalationSeason);
-
-    MH_EnableHook((void*)(Globals::BaseAddress + 0x14F2A30));
+    CORE_HOOK(0x14F2A30, GetEscalationSeason, OrigGetEscalationSeason);
 
     //
 
@@ -1314,6 +1215,8 @@ void InitServerHooks() {
     *(uint8_t*)(Globals::BaseAddress + 0x79A815 + 0x0) = 0x01;
 
     VirtualProtect((void*)(Globals::BaseAddress + 0x79A815), 0x1, oldProtect, &oldProtect);
+
+    Vibeless::WriteReport(FeatureHost::Side::Server, Globals::Port);
 }
 
 void Init() {
@@ -1337,7 +1240,6 @@ void Init() {
             Globals::ServerAPIKey = Args[1];
             Globals::Port = std::stoi(std::wstring(Args[2]));
             HuntPortPolicy::LoadFromEnvironment();
-            if (DevelopmentAccessPolicy::Enabled && Globals::Port == 8766) EnableWatchdog = false;
             Globals::MapPath = Args[3];
             Globals::BehemothPath = Args[4];
             Globals::MatchmakerHuntId = Args[5];

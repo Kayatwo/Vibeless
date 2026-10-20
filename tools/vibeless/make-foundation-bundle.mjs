@@ -34,6 +34,8 @@ const copy = (from, to) => fs.cpSync(path.join(root, from), path.join(out, to), 
 const commit = run("git", ["rev-parse", "HEAD"]);
 const dirty = run("git", ["status", "--porcelain"]).length > 0;
 const version = fs.readFileSync(path.join(root, "VIBELESS-VERSION"), "utf8").trim();
+const compiledVersion = /#define VIBELESS_VERSION "([^"]+)"/.exec(fs.readFileSync(path.join(root, "UndauntedInternalServer", "VibelessVersion.h"), "utf8"))?.[1];
+if (compiledVersion !== version) throw new Error(`VibelessVersion.h (${compiledVersion}) differs from VIBELESS-VERSION (${version})`);
 fs.mkdirSync(out, { recursive: true });
 
 // Native runtime and proxy loader

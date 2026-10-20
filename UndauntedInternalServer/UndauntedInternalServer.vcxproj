@@ -151,6 +151,9 @@
     <ClInclude Include="FoundationSettings.h" />
     <ClInclude Include="ProfileRootPolicy.h" />
     <ClInclude Include="ProfileRoot.h" />
+    <ClInclude Include="FeatureHost.h" />
+    <ClInclude Include="VibelessFeatures.h" />
+    <ClInclude Include="VibelessVersion.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Networking.h" />
     <ClInclude Include="FallRecovery.h" />
