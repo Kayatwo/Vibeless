@@ -1,8 +1,6 @@
 ## What this changes
 
-<!-- A short description. Link the Discussion or issue it came from. -->
-
-Roadmap step: <!-- e.g. 2.7, or "none" -->
+<!-- A short description. Link the issue it came from. -->
 
 ## How I tested it
 
@@ -15,7 +13,7 @@ Roadmap step: <!-- e.g. 2.7, or "none" -->
 
 - [ ] No keys, tokens, `.env` files, databases, backups, logs or game files are included
 - [ ] Docs updated if behaviour changed
-- [ ] If `ROADMAP.md` changed, I ran `node tools/sync-roadmap.js`
+- [ ] New settings or user-visible changes are recorded in `VIBELESS.md`
 - [ ] I agree that this contribution is licensed under AGPL-3.0-only, like the rest of the project
 
 <!-- Security fixes: please report the problem privately first (see SECURITY.md) and coordinate before opening a public pull request. -->

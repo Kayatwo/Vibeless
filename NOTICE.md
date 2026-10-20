@@ -6,7 +6,7 @@ file records where the parts of the repository come from. Suomeksi: [below](#suo
 
 ## Vibeless modification notice
 
-Vibeless (private repository `github.com/Kayatwo/Vibeless`, branch `main`) is a modified version of
+Vibeless ([github.com/Kayatwo/Vibeless](https://github.com/Kayatwo/Vibeless), branch `main`) is a modified version of
 Dauntless Revived, itself a modified version of Undaunted. It starts from Dauntless Revived commit
 `c39bcfa1b1a626c888416ef32f8b420082d7ead7` (tag `import/c39bcfa`); Vibeless modifications began on
 19 October 2026 and are recorded commit by commit on `main`. They add 1.4.4-compatible content

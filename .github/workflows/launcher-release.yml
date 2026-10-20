@@ -41,6 +41,8 @@ permissions: {}
 jobs:
   prepare:
     name: Version and release state
+    # Vibeless does not publish upstream's launcher: every later job needs this one, so nothing runs in forks.
+    if: github.repository == 'mixutin/dauntless-revived'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

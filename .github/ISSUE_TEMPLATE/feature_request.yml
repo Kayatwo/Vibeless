@@ -1,65 +1,34 @@
 name: Feature request
-description: Suggest something Dauntless Revived should do.
+description: Suggest something Vibeless should do.
 title: "[Idea]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea. You can write in English or in Finnish (suomeksi).
-
-        Bigger ideas are best discussed first in Discussions: https://github.com/mixutin/dauntless-revived/discussions
-        Many features are already planned in the roadmap: https://github.com/mixutin/dauntless-revived/blob/dauntless-revived/ROADMAP.md
-
-        Requests for game files, public servers or help with piracy will be closed.
-  - type: checkboxes
-    id: checks
-    attributes:
-      label: Before you start
-      options:
-        - label: I checked the roadmap and the existing issues and discussions for this idea.
-          required: true
+        Thanks for the idea. Vibeless keeps the original 1.4.4 mechanics as the default: gameplay changes
+        are best proposed as a separately enabled package or setting.
   - type: textarea
     id: problem
     attributes:
       label: What problem would this solve?
-      description: Describe what you are trying to do and what gets in the way.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: What would you like to happen?
-      description: Describe the change. It is fine to say you are not sure how it should work.
+      label: What do you propose?
     validations:
       required: true
-  - type: input
-    id: roadmap-id
-    attributes:
-      label: Related roadmap step
-      description: If the roadmap already covers this, give the step id.
-      placeholder: e.g. 1.9 or 2.15
   - type: dropdown
-    id: area
+    id: kind
     attributes:
-      label: Area
+      label: What kind of change is it?
       options:
-        - Playing with friends
-        - Saving progress
-        - Game features (hunts, events, store, chat)
-        - Hosting and running the server
-        - Friend kit
-        - Docs
-        - Other
+        - Foundation (runtime, services, package contracts)
+        - Content package
+        - Setting for existing behaviour
+        - Tooling or documentation
+        - Not sure
     validations:
       required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives you considered
-  - type: checkboxes
-    id: help
-    attributes:
-      label: Can you help?
-      options:
-        - label: I would like to work on this myself (please start a Discussion first).

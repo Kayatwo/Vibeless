@@ -88,7 +88,7 @@ describe("GetServerIdentity", () => {
 
             const Defaults = GetServerIdentity();
             assert.equal(Defaults.name, "Dauntless Revived");
-            assert.equal(Defaults.sourceUrl, "https://github.com/mixutin/dauntless-revived");
+            assert.equal(Defaults.sourceUrl, "https://github.com/Kayatwo/Vibeless");
             assert.equal(Defaults.version, "0.0.5");
             assert.equal(typeof Defaults.commit, "string");
 

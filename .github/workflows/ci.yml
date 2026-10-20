@@ -8,6 +8,9 @@
 #  - repository hygiene: no secrets or game files in the tracked files or in the commits being pushed
 #    (tools/ci/check-repo.js)
 #
+# Vibeless: the launcher release jobs below run only in upstream's repository (mixutin/dauntless-revived);
+# in Vibeless the launcher is built and tested but never published.
+#
 # Automatic launcher releases are ON: set the repository variable LAUNCHER_AUTO_RELEASE to false
 # (Settings > Secrets and variables > Actions > Variables) to pause them. A push to dauntless-revived that passes
 # every check, is still the head of the branch, and whose UndauntedLauncher/package.json version has no

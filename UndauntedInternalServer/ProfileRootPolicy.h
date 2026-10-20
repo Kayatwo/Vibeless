@@ -2,7 +2,6 @@
 //
 // The features (backport creatures, Test Arena, diagnostics) run only inside a prepared profile:
 // <root>/game/Archon/Binaries/Win64/Dauntless-Win64-Shipping.exe, where <root> is
-//   - the original BackportDev lab (kept for the installed release), or
 //   - a folder holding vibeless-profile.json, or
 //   - the folder named by DR_PROFILE_ROOT (it must be the same folder the game runs from).
 // Anything else, such as an unmodified game folder, keeps the features off. Portable: no Windows calls.
@@ -13,7 +12,6 @@
 #include <string_view>
 
 namespace ProfileRootPolicy {
-inline constexpr std::wstring_view LegacyLabRoot = L"C:/Dauntless/Experiments/Dojo144/";
 inline constexpr std::wstring_view ExeSuffix = L"/game/Archon/Binaries/Win64/Dauntless-Win64-Shipping.exe";
 inline constexpr std::wstring_view MarkerFile = L"vibeless-profile.json";
 
@@ -43,7 +41,6 @@ inline std::wstring Resolve(std::wstring_view exePath, std::wstring_view envRoot
     if (!SameText(std::wstring_view(exe).substr(suffixAt), ExeSuffix)) return {};
     const auto root = WithSlash(exe.substr(0, suffixAt));
     if (root.find(L"/../") != std::wstring::npos || root.find(L"/./") != std::wstring::npos) return {};
-    if (SameText(root, LegacyLabRoot)) return std::wstring(LegacyLabRoot);
     if (!envRoot.empty()) return SameText(WithSlash(Slashes(envRoot)), root) ? root : std::wstring{};
     return markerExists && markerExists(root + std::wstring(MarkerFile)) ? root : std::wstring{};
 }

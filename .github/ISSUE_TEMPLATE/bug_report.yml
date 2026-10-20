@@ -1,23 +1,22 @@
 name: Bug report
-description: Something in Dauntless Revived does not work as it should.
+description: Something in Vibeless does not work as it should.
 title: "[Bug]: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug. You can write in English or in Finnish (suomeksi).
+        Thanks for reporting a bug.
 
-        **Security problem?** Do not use this form. Report it privately: https://github.com/mixutin/dauntless-revived/security/advisories/new
-        **Just a question?** Ask in Discussions instead: https://github.com/mixutin/dauntless-revived/discussions
+        **Security problem?** Do not use this form. Report it privately: https://github.com/Kayatwo/Vibeless/security/advisories/new
 
-        **Before you paste logs:** remove account keys, tokens, `.env` values and anything else secret.
+        **Before you paste logs:** remove account keys, tokens, `.env` values and anything else secret. Never attach game files.
   - type: checkboxes
     id: checks
     attributes:
       label: Before you start
       options:
-        - label: I searched the existing issues and the troubleshooting page (https://mixutin.github.io/dauntless-revived/setup/troubleshooting.html).
+        - label: I searched the existing issues.
           required: true
         - label: This is not a security vulnerability.
           required: true
@@ -28,12 +27,13 @@ body:
     attributes:
       label: Which part is affected?
       options:
+        - Native runtime (UndauntedInternalServer)
+        - Feature host or a native feature
+        - Compatibility check (client or server)
         - Metagame (backend)
         - Deploy server
-        - Game server (Ramsgate, hunts, Training Dojo)
-        - Server DLL (UndauntedInternalServer)
-        - Friend kit (setup or launcher)
-        - Docs site
+        - Foundation bundle or CI
+        - Inherited upstream part (launcher, server kit, docs site)
         - Not sure
     validations:
       required: true
@@ -55,44 +55,19 @@ body:
     attributes:
       label: Steps to reproduce
       description: What did you do, step by step? Did it happen once or every time?
-      placeholder: |
-        1. Start the stack
-        2. Log in and go to Ramsgate
-        3. ...
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Commit or friend kit version
-      description: The commit you run (`git rev-parse --short HEAD`), or the version in the friend kit's SOURCE.txt.
-      placeholder: e.g. f557d74
+      label: Commit or bundle version
+      description: The commit you built (`git rev-parse --short HEAD`), or `version` from the bundle's foundation-manifest.json.
+      placeholder: e.g. 0.1.0+0c4443198fd0
     validations:
       required: true
-  - type: dropdown
-    id: role
-    attributes:
-      label: Where did it happen?
-      options:
-        - On the host PC
-        - On a friend's PC
-        - Both
-        - Not sure
-    validations:
-      required: true
-  - type: input
-    id: os
-    attributes:
-      label: Operating system
-      placeholder: e.g. Windows 11 23H2
   - type: textarea
-    id: logs
+    id: reports
     attributes:
-      label: Relevant log lines
-      description: A short excerpt from the metagame, deploy server or game server log. It is formatted as code automatically.
-      render: shell
-  - type: textarea
-    id: extra
-    attributes:
-      label: Anything else?
-      description: Screenshots of error messages, what you already tried, or anything that changed recently.
+      label: Runtime reports and logs
+      description: If relevant, the profile's reports/runtime-*.json and the lines of the service logs around the problem (secrets removed).
+      render: text

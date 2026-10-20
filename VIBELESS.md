@@ -34,7 +34,8 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
 4. Overspend refusal on by default; `INVENTORY_REFUSE_OVERSPEND=0` restores upstream clamping.
 5. Repository rules: LF storage for text files (`.gitattributes`), Windows CI for SDK-dependent
    tests; Dependabot version updates disabled (dependencies follow the upstream sync policy).
-6. Profile root instead of the hard-coded lab path (`ProfileRootPolicy.h`).
+6. Profile root instead of the hard-coded lab path (`ProfileRootPolicy.h`); the lab path itself was
+   removed before the repository became public.
 7. Adjustable foundation settings (`FoundationSettings.h`).
 8. Published-source proxy loader (`VibelessProxy/`), built and tested in CI.
 9. Core-only build: MSBuild `/p:VibelessFeatures=0` compiles out every backport, Test Arena,
@@ -61,7 +62,7 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
     included) for players without a matching report; a server without packages accepts clients that
     run no features. Compositions made before this change must be composed again.
 
-## Verification status (2026-10-19)
+## Verification status (2026-10-20)
 
 CI on `main` passes the backend suites (deploy, metagame, gateway, content), portable and Windows
 native tests, the default and core-only DLL builds, the proxy loader test and the bundle assembly;
@@ -79,12 +80,15 @@ errors, the Test Arena session (now a composed hunt rule) spawned, despawned and
 Training Grounds stayed original; the core profile reported no features, used the bundled tables and ran
 Ramsgate and Training Grounds. Not yet verified: backport pursuits on a progressed account, the Vibeless proxy loader in
 game, clean-machine and offline installation, and upgrade/rollback.
+The compatibility contract (`68e745b` onwards) was tried in game once: requirements were served, the
+client reported and showed its message box, but flagged the internal `hunt-services` feature. The fix
+(internal features are left out of the contract) still needs a CI build and an in-game check.
 
 ## Profiles and settings
 
 Vibeless features (backport creatures, Test Arena, diagnostics) run only when the game executable
-sits at `<root>/game/Archon/Binaries/Win64/Dauntless-Win64-Shipping.exe` and `<root>` is the
-original BackportDev lab, contains `vibeless-profile.json`, or equals `DR_PROFILE_ROOT`. The
+sits at `<root>/game/Archon/Binaries/Win64/Dauntless-Win64-Shipping.exe` and `<root>` contains
+`vibeless-profile.json` or equals `DR_PROFILE_ROOT`. The
 profile's client and servers then use `<root>/user/client/` and `<root>/user/server-<port>/` as
 UserDir and write diagnostics under `<root>/reports/`. Any other installation runs the upstream
 behaviour.

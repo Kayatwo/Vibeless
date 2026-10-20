@@ -221,7 +221,7 @@ describe("GET /undaunted/api/ServerStatus", () => {
         assert.equal(Status.online, true);
         assert.equal(typeof Status.version, "string");
         assert.equal(typeof Status.commit, "string");
-        assert.equal(Status.sourceUrl, "https://github.com/mixutin/dauntless-revived");
+        assert.equal(Status.sourceUrl, "https://github.com/Kayatwo/Vibeless");
         assert.equal(Status.registration, "OPEN");
         assert.equal(Status.contentPort, 61002);
         assert.ok(Number.isInteger(Status.uptimeSeconds) && Status.uptimeSeconds >= 0);
@@ -311,7 +311,7 @@ describe("GET /dauntless-status", () => {
         assert.deepEqual(Keys.slice(0, 9), ["show-status", "en", "fr", "it", "es", "de", "pt", "ru", "ja"]);
         assert.equal(Reply.json["show-status"], true);
         assert.deepEqual(Keys.slice(9), ["name", "version", "commit", "sourceUrl"]);
-        assert.equal(Reply.json.sourceUrl, "https://github.com/mixutin/dauntless-revived");
+        assert.equal(Reply.json.sourceUrl, "https://github.com/Kayatwo/Vibeless");
 
         // Two players are online (the ServerStatus test's heartbeats), yet anyone may call this
         // route: not even the count is in it, with or without a key

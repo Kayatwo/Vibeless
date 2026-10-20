@@ -1,4 +1,8 @@
-<p align="right"><a href="README.md">🇬🇧 In English</a></p>
+<p align="right"><a href="UPSTREAM-README.md">🇬🇧 In English</a></p>
+
+> **Vibeless-huomautus:** tämä on alkuperäisen [Dauntless Revived](https://github.com/mixutin/dauntless-revived) -projektin
+> README, säilytetty viitteeksi. Vibeless kuvataan englanniksi tiedostossa [README.md](README.md).
+
 
 <p align="center">
   <img src=".github/assets/banner.png" width="100%" alt="Dauntless Revivedin banneri. Vasemmalla projektin logo: lohikäärmeen pää ja sen alla teksti Dauntless Revived. Oikealla englanniksi: Dauntless 1.4.4 -pelin yksityinen palvelin. Aitoa Dauntless 1.4.4 -peliä voi pelata palvelimella, jonka pystytät itse. Pohjana gwogin ja muiden tekijöiden Undaunted, lisenssi AGPL-3.0. Epävirallinen faniprojekti, joka ei liity Phoenix Labsiin.">

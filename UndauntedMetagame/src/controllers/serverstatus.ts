@@ -85,7 +85,8 @@ export type ServerStatus = {
 export type StatusVariant = "full" | "limited";
 
 const DEFAULT_SERVER_NAME = "Dauntless Revived";
-const DEFAULT_SOURCE_URL = "https://github.com/mixutin/dauntless-revived";
+// Vibeless: the AGPL source offer of a server built from this repository points here unless SOURCE_URL says otherwise.
+const DEFAULT_SOURCE_URL = "https://github.com/Kayatwo/Vibeless";
 const CACHE_MS = 5000;
 const DEPLOYSERVER_TIMEOUT_MS = 2000;
 
