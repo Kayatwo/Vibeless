@@ -20,6 +20,7 @@ import { slayerLinksRouter } from "./routes/slayerlinks.js";
 import { progressionRouter } from "./routes/progression.js";
 import { loadoutRouter } from "./routes/loadout.js";
 import { undauntedApiRouter } from "./routes/undauntedapi.js";
+import { vibelessRouter } from "./routes/vibeless";
 import { DescribeOrigin, RefuseProxiedInDevAuthMode } from "./middleware/RequestOrigin.js";
 import { BodyLog, Redact } from "./middleware/BodyLog.js";
 import { backupRouter } from './routes/backup';
@@ -77,6 +78,7 @@ app.use("/", partyRouter);
 app.use("/", slayerLinksRouter);
 app.use("/", progressionRouter);
 app.use("/", loadoutRouter);
+app.use("/", vibelessRouter); // Vibeless compatibility contract (requirements, client reports)
 app.use("/undaunted/api", undauntedApiRouter); // Everything that I/we add to help manage undaunted that doesn't belong to the game proper belongs here
 
 app.use((req, res) => {

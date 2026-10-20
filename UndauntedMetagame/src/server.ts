@@ -11,6 +11,7 @@ import { DescribeFeatures } from "./features";
 import { PruneExpiredStorePurchases } from "./controllers/freestore";
 import { CheckProgressionConfig } from "./controllers/progressionconfig";
 import { SetDailyTokensOnce } from "./controllers/inventory";
+import { HasRequirements, ServerRequirements } from "./controllers/compatibility";
 
 const PORT = Number(process.env.PORT);
 // Bind to loopback unless told otherwise. Upstream listened on every
@@ -75,6 +76,12 @@ let Server: ReturnType<typeof app.listen> | undefined;
 const Startup = DrainAndRegisterAPIKeys().then(async () => {
   await DrainAndRegisterUserAPIKeys();
   if (Stopping) return;
+
+  // Vibeless: read the composition's client requirements now, so a broken composition stops the start.
+  const Requirements = ServerRequirements();
+  logger.info(HasRequirements(Requirements)
+    ? `Clients must match ${Requirements.packages.length} packages and features ${Requirements.features.join(",") || "(none)"}`
+    : "No package requirements for clients");
 
   // Text chat (roadmap 3.10, docs/findings/chat.md): on by default, CHAT=0 opts out. A bad setting or a
   // port in use is one error line; the metagame always starts, with or without chat.

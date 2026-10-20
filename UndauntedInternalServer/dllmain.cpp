@@ -71,6 +71,7 @@ using namespace SDK;
 #endif
 // Features reach the game only through the feature host's events (Phase 2).
 #include "VibelessFeatures.h"
+#include "VibelessCompatibility.h"
 // Every core detour is claimed in the feature host, so a feature can never replace the same function.
 #define CORE_HOOK(rva, detour, original) \
     Vibeless::Hook(Globals::BaseAddress, rva, reinterpret_cast<void*>(&detour), &original, #detour)
@@ -1322,6 +1323,8 @@ void Init() {
 
         DR_InitDiagnostics(); // only when GAMESERVER_READY_DIR is set, e.g. a manual debug launch
         InitClientHooks();
+        // Phase 2 compatibility contract: compare this game with the server's requirements before it joins.
+        if (!Globals::MetagameAddress.empty()) VibelessCompatibility::Start(Globals::MetagameAddress);
     }
 
     DWORD threadId;

@@ -1,3 +1,4 @@
+import { MatchmakingCompatibilityProblem } from "./compatibility";
 import { PlayerRegion, RegionQueueKey, HuntRegion, RegionChoice } from './huntregion';
 import { CapacityTurns } from './capacityturns';
 import { logger } from "../logger";
@@ -1119,6 +1120,15 @@ export async function HandlePlayerMatchmaking(GameMode: string, GameArgs: string
 }
 
 async function HandlePlayerMatchmakingOnce(GameMode: string, GameArgs: string, HuntId: string, PlayerId: string, Private = false){
+    // Vibeless: a server with packages only matches clients that reported matching content.
+    const Incompatible = MatchmakingCompatibilityProblem(PlayerId);
+
+    if(Incompatible != undefined){
+        logger.warn(`Refusing matchmaking for ${PlayerId}: ${Incompatible}`);
+
+        return false;
+    }
+
     const BadInput = CheckMatchmakingInput(GameMode, GameArgs, HuntId);
 
     if(BadInput != undefined){

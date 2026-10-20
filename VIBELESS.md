@@ -52,6 +52,14 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
     1.4.4 tables again, plus an empty `hunt_rules.json`. Packages add their hunts, names and session
     rules (for example the Test Arena's one-player, no-behemoth session) through composed tables
     that `DR_TABLES_DIR` points to; the former Test Arena branch in `gameservers.ts` is gone.
+13. Multiplayer compatibility contract (Phase 2; `Compatibility.h`, `VibelessCompatibility.h`,
+    metagame `controllers/compatibility.ts`): the metagame publishes what a joining client needs at
+    `GET /vibeless/requirements` (foundation version, native features, each client .pak with its
+    SHA-256, from the composition's `requirements`). At start the client compares that with what it
+    has, reports to `POST /vibeless/compatibility`, and on a mismatch names each problem in a message
+    box and closes before joining a world. A server with packages refuses matchmaking (Ramsgate
+    included) for players without a matching report; a server without packages accepts clients that
+    run no features. Compositions made before this change must be composed again.
 
 ## Verification status (2026-10-19)
 
@@ -90,6 +98,7 @@ behaviour.
 | `DR_DUALSENSE` | client | on/off | on |
 | `INVENTORY_REFUSE_OVERSPEND` | metagame | `0` restores upstream clamping | refuse |
 | `DR_FEATURES` | client, game servers (same value) | `none`, or native feature IDs (`hunt-services`, `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes`), comma or space separated; required features are added | every feature except `reward-probes` |
+| `DR_COMPATIBILITY_CHECK` | client | `off` keeps the game open on a mismatch (troubleshooting; the server still refuses matchmaking) | on |
 | `DR_TABLES_DIR` | deploy, metagame | folder of composed tables (`deploy/player_hunts_table.json`, `deploy/matchmaker_hunts_table.json`, `deploy/hunt_rules.json`, `metagame/hunt_titles.json`); all must be present | bundled 1.4.4 tables |
 
 Packages name the native features they need as capabilities (`native-feature:deepfrost`); the

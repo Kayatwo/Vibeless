@@ -44,7 +44,8 @@ export async function Call(Method: string, Path: string, Options: { as?: string,
 
     if(Options.as !== undefined) Headers["authorization"] = `bearer ${SignMetagameJWTForUid(Options.as)}`;
     if(Options.gs) Headers["x-undaunted-gameserver-apikey"] = GS_KEY;
-    if(Options.body !== undefined || Options.raw !== undefined) Headers["content-type"] = "application/json; charset=utf-8";
+    const HasContentType = Object.keys(Headers).some((Name) => Name.toLowerCase() === "content-type");
+    if((Options.body !== undefined || Options.raw !== undefined) && !HasContentType) Headers["content-type"] = "application/json; charset=utf-8";
 
     const Response = await fetch(Base + Path, {
         method: Method,
