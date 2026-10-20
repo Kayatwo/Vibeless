@@ -25,7 +25,9 @@ static Feature Make(std::string id, std::vector<std::string> needs = {}, Side si
 
 static Host Standard() {
     Host host;
-    assert(host.Register(Make("hunt-services")).empty());
+    auto services = Make("hunt-services");
+    services.Internal = true;
+    assert(host.Register(services).empty());
     assert(host.Register(Make("deepfrost", {"hunt-services"})).empty());
     assert(host.Register(Make("thunderdeep", {"hunt-services"})).empty());
     assert(host.Register(Make("test-arena", {"hunt-services"})).empty());
@@ -63,6 +65,14 @@ int main() {
         host.ServerTick({});
         assert((Trace == std::vector<std::string>{"hunt-services:tick", "deepfrost:tick",
             "thunderdeep:tick", "test-arena:tick"}));
+    }
+
+    // The compatibility contract sees only the features packages name, not internal services.
+    {
+        auto host = Standard();
+        host.Start(Side::Client, true, ParseEnableList(std::string_view("test-arena")));
+        assert(host.Enabled("hunt-services"));
+        assert((host.PackageFeatures() == std::set<std::string>{"test-arena"}));
     }
 
     // Core only: nothing subscribes, so the runtime installs no feature hooks.

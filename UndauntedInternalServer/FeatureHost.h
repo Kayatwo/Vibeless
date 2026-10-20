@@ -54,6 +54,9 @@ struct Feature {
     std::string Version;
     Side Sides = Side::Both;
     bool DefaultEnabled = true;
+    // Internal: a foundation service that only other features require. Packages never name it, so it
+    // is left out of the compatibility contract (PackageFeatures).
+    bool Internal = false;
     std::vector<std::string> Requires;
     std::function<bool(Side)> Install;  // optional; false keeps the feature off
     std::function<void(const Tick&)> ClientTickBefore, ClientTickAfter, ServerTick;
@@ -63,7 +66,7 @@ struct Feature {
 
 struct HookClaim { std::uintptr_t Target = 0; std::string Name, Owner; bool Active = false; std::string Error; };
 
-struct FeatureState { std::string Id, Version; bool Enabled = false; std::string Reason; };
+struct FeatureState { std::string Id, Version; bool Enabled = false; std::string Reason; bool Internal = false; };
 
 struct EnableList {
     bool Defaults = true;               // unset: use each feature's DefaultEnabled
@@ -134,7 +137,7 @@ public:
             if (!known) errors_.push_back("DR_FEATURES names unknown feature " + id);
         }
         for (auto& feature : features_) {
-            FeatureState state{feature.Id, feature.Version, false, {}};
+            FeatureState state{feature.Id, feature.Version, false, {}, feature.Internal};
             const bool wanted = list.Defaults ? feature.DefaultEnabled : listed_.count(feature.Id) > 0;
             const auto missing = std::find_if(feature.Requires.begin(), feature.Requires.end(),
                 [&](const std::string& id) { return !enabled.count(id); });
@@ -169,6 +172,13 @@ public:
 
     bool Enabled(std::string_view id) const {
         return std::any_of(states_.begin(), states_.end(), [&](const FeatureState& s) { return s.Id == id && s.Enabled; });
+    }
+    // Enabled features that packages can ask for, as the compatibility contract compares them.
+    std::set<std::string> PackageFeatures() const {
+        std::set<std::string> ids;
+        for (const auto& state : states_)
+            if (state.Enabled && !state.Internal) ids.insert(state.Id);
+        return ids;
     }
     bool HasClientTick() const { return !clientTickBefore_.empty() || !clientTickAfter_.empty(); }
 

@@ -135,8 +135,7 @@ inline void Run(std::wstring address) {
 
     Compatibility::ClientState client;
     client.Foundation = VIBELESS_VERSION;
-    for (const auto& state : Vibeless::Features().States())
-        if (state.Enabled) client.Features.insert(state.Id);
+    client.Features = Vibeless::Features().PackageFeatures();
     const auto paks = PaksFolder();
     for (const auto& file : required.Files) {
         std::error_code error;

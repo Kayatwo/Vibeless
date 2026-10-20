@@ -92,6 +92,7 @@ inline void RegisterFeatures(uintptr_t base) {
     Feature services;
     services.Id = "hunt-services";
     services.Version = "1.0.0";
+    services.Internal = true;  // required by the creature and arena features, never named by a package
     services.Install = [base](Side side) {
         if (side != Side::Client) return true;
         // FrostReturn installs its own three detours after checking their prologues; claim them first.
