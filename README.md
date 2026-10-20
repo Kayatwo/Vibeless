@@ -45,6 +45,9 @@ references and settings, is in [VIBELESS.md](VIBELESS.md).
   features, hooks and errors.
 - **Hunt tables by composition.** The foundation ships upstream's 1.4.4 tables. Packages add hunts,
   names and session rules through composed tables (`DR_TABLES_DIR`) instead of editing shared files.
+- **Content registry.** The shared creature and hunt services (authored strength, menu
+  recommendations, Return to Ramsgate) read the hunts and destinations packages register, instead of
+  naming any package's content in code.
 - **Multiplayer compatibility contract.** A server publishes what a joining client needs (foundation
   version, native features, content file hashes). The client checks this before it joins and names
   every mismatch; the server refuses matchmaking to clients that do not match.

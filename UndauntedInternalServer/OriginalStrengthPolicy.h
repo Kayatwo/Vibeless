@@ -1,25 +1,22 @@
+// Authored strength restoration rules (shared hunt services). Which hunts and creatures it applies to
+// comes from the content registry (ContentRegistry.h), not from this file. AGPL-3.0-only.
 #pragma once
 #include <cmath>
 #include <optional>
 #include <set>
 #include <string>
 #include <string_view>
+#include "ContentRegistry.h"
 #include "HuntPortPolicy.h"
 
 namespace OriginalStrengthPolicy {
-struct Stats { float Power, Resistance; };
-inline std::optional<Stats> Authored(std::string_view hunt) {
-    if (hunt == "Frost144_MatchmakerHunt_Gnasher") return Stats{240, 120};
-    if (hunt == "Thunderdeep144_MatchmakerHunt_Drask") return Stats{420, 330};
-    return {};
-}
-inline std::optional<Stats> Expected(int port, std::string_view hunt, std::string_view actorClass) {
+using Stats = ContentRegistry::Strength;
+// The strength a spawned creature must get back: only on hunt servers, only for a registered hunt
+// and exactly its registered creature class.
+inline std::optional<Stats> Expected(const ContentRegistry::Registry& registry, int port,
+    std::string_view hunt, std::string_view actorClass) {
     if (!HuntPortPolicy::IsHunt(port)) return {};
-    if (hunt == "Frost144_MatchmakerHunt_Gnasher"
-        && actorClass == "/Game/Monsters/frost144/mcbeaver_frost_bp.mcbeaver_frost_bp_C") return Authored(hunt);
-    if (hunt == "Thunderdeep144_MatchmakerHunt_Drask"
-        && actorClass == "/Game/Monsters/drask144/fulgar_alpha_bp.fulgar_alpha_bp_C") return Authored(hunt);
-    return {};
+    return registry.AuthoredFor(hunt, actorClass);
 }
 inline bool Matches(float actual, float expected) {
     return std::isfinite(actual) && std::fabs(actual - expected) < 0.001f;

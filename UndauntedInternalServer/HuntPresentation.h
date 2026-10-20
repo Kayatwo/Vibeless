@@ -1,6 +1,7 @@
 #pragma once
 #include "HuntPresentationPolicy.h"
 #include "FeatureSupport.h"
+#include "VibelessContent.h"
 #include "SDK/huntinfo_current_loadout_rec_bpw_parameters.hpp"
 #include "SDK/hunt_function_library_parameters.hpp"
 
@@ -13,12 +14,12 @@ inline void AfterEvent(UObject* object, UFunction* function, void* parameters) {
     if (parameters && name == "GetAverageBehemothPowerForHunt"
         && function->Outer && function->Outer->GetName() == "hunt_function_library_C") {
         auto& query = *static_cast<Params::hunt_function_library_C_GetAverageBehemothPowerForHunt*>(parameters);
-        if (const auto stats = HuntPresentationPolicy::ForHunt(query.PlayerHuntId.ToString(), query.MatchmakerHuntID.ToString()))
+        if (const auto stats = HuntPresentationPolicy::ForHunt(Vibeless::Content(), query.PlayerHuntId.ToString(), query.MatchmakerHuntID.ToString()))
             query.AveragePower = stats->Power;
     }
     if (parameters && name == "UpdateRecommendedStats" && object->IsA(Uhuntinfo_current_loadout_rec_bpw_C::StaticClass())) {
         const auto& query = *static_cast<Params::huntinfo_current_loadout_rec_bpw_C_UpdateRecommendedStats*>(parameters);
-        const auto stats = HuntPresentationPolicy::ForHunt(query.PlayerHuntId.ToString(), query.MatchmakerHuntID.ToString());
+        const auto stats = HuntPresentationPolicy::ForHunt(Vibeless::Content(), query.PlayerHuntId.ToString(), query.MatchmakerHuntID.ToString());
         if (!stats) return;
         auto* widget = static_cast<Uhuntinfo_current_loadout_rec_bpw_C*>(object);
         const auto targets = HuntPresentationPolicy::Recommended(*stats);
@@ -45,7 +46,7 @@ inline void AfterEvent(UObject* object, UFunction* function, void* parameters) {
     if ((name == "OnViewModelUpdated" || name == "UpdateViewModelFromPlayerHuntID")
         && object->IsA(UHuntInfoPageWidget::StaticClass())) {
         auto* page = static_cast<UHuntInfoPageWidget*>(object);
-        if (const auto stats = HuntPresentationPolicy::ForHunt(page->MapItemViewModel.PlayerHuntId.ToString(), "")) {
+        if (const auto stats = HuntPresentationPolicy::ForHunt(Vibeless::Content(), page->MapItemViewModel.PlayerHuntId.ToString(), "")) {
             const auto targets = HuntPresentationPolicy::Recommended(*stats);
             const auto label = Text(L"Weapon " + std::to_wstring(static_cast<int>(targets.Weapon))
                 + L" / Armour " + std::to_wstring(static_cast<int>(targets.Armour)));
@@ -67,7 +68,7 @@ inline void Tick(UWorld* world) {
         if(!candidate || candidate->IsDefaultObject()) continue;
         auto* page=static_cast<UHuntInfoPageWidget*>(candidate);
         const auto id=page->MapItemViewModel.PlayerHuntId.ToString();
-        if(!HuntPresentationPolicy::ForHunt(id,"")) continue;
+        if(!HuntPresentationPolicy::ForHunt(Vibeless::Content(), id,"")) continue;
         AfterEvent(page,FeatureSupport::FindFunction(page,"OnViewModelUpdated"),nullptr);
         // Blueprint-to-Blueprint calls can bypass UObject::ProcessEvent. Also
         // correct the page's bound recommendation widget from its current ID.

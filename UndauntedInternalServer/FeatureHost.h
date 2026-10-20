@@ -169,6 +169,8 @@ public:
             if (claim.Target == target) { claim.Active = active; claim.Error = std::move(error); }
     }
     void AddError(std::string error) { errors_.push_back(std::move(error)); }
+    // Extra facts for the startup report (for example where the content registry came from).
+    void SetInfo(std::string key, std::string value) { info_[std::move(key)] = std::move(value); }
 
     bool Enabled(std::string_view id) const {
         return std::any_of(states_.begin(), states_.end(), [&](const FeatureState& s) { return s.Id == id && s.Enabled; });
@@ -219,7 +221,10 @@ public:
                 + ", \"active\": " + (h.Active ? "true" : "false")
                 + (h.Error.empty() ? std::string() : ", \"error\": " + Quote(h.Error)) + "}";
         }
-        out += std::string(hooks_.empty() ? "" : "\n  ") + "],\n  \"errors\": [";
+        out += std::string(hooks_.empty() ? "" : "\n  ") + "],\n  \"info\": {";
+        bool first = true;
+        for (const auto& [key, value] : info_) { out += std::string(first ? "" : ", ") + Quote(key) + ": " + Quote(value); first = false; }
+        out += "},\n  \"errors\": [";
         for (size_t i = 0; i < errors_.size(); ++i) out += std::string(i ? ", " : "") + Quote(errors_[i]);
         return out + "]\n}\n";
     }
@@ -253,6 +258,7 @@ private:
     std::vector<FeatureState> states_;
     std::vector<HookClaim> hooks_;
     std::vector<std::string> errors_;
+    std::map<std::string, std::string> info_;
     std::vector<std::function<void(const Tick&)>> clientTickBefore_, clientTickAfter_, serverTick_;
     std::vector<std::function<bool(const Event&)>> clientIntercept_, serverIntercept_;
     std::vector<std::function<void(const Event&)>> clientAfter_, serverBefore_, serverAfter_;

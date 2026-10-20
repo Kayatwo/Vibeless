@@ -16,6 +16,7 @@
 #include <string>
 #include <windows.h>
 #include "FeatureHost.h"
+#include "VibelessContent.h"
 #include "MinHook/MinHook.h"
 #include "ProfileRoot.h"
 #include "VibelessVersion.h"
@@ -180,5 +181,12 @@ namespace Vibeless {
 inline void StartFeatures(uintptr_t base, FeatureHost::Side side) {
     RegisterFeatures(base);
     Features().Start(side, !ProfileRoot::Root().empty(), EnableListFromEnvironment());
+    // The content registry the shared services read (empty without packages).
+    const auto& content = ContentInfo();
+    std::string source;
+    for (const wchar_t c : content.Source) source += c < 128 ? static_cast<char>(c) : '?';
+    Features().SetInfo("contentRegistry", content.Found ? source : source.empty() ? "none" : "none (" + source + " not found)");
+    Features().SetInfo("contentEntries", std::to_string(content.Registry.Entries.size()));
+    for (const auto& error : content.Registry.Errors) Features().AddError(error);
 }
 }

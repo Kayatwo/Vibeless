@@ -9,9 +9,7 @@
 #include <string>
 #include <vector>
 #include "FeatureSupport.h"
-#include "FrostHuntConfig.h"
-#include "ThunderdeepHuntConfig.h"
-#include "TestArenaPolicy.h"
+#include "VibelessContent.h"
 #include "SDK/UMG_classes.hpp"
 #include "SDK/UMG_parameters.hpp"
 #include "MinHook/MinHook.h"
@@ -84,37 +82,31 @@ inline void Restore() {
     Active = false; Feature = nullptr; FeatureIndex = -1;
     OriginalBranches.clear(); OriginalEnvironments.clear();
 }
-inline bool IsFrostArenaClient(UWorld* world) {
+// A client connected to a hunt-style world whose game state names its matchmaker hunt.
+inline bool IsReturnClient(UWorld* world) {
     if (!FeatureSupport::IsExpectedProcess() || !world || world->AuthorityGameMode
         || !world->NetDriver || !world->NetDriver->ServerConnection || !world->GameState) return false;
-    if (FrostHuntConfig::IsDedicatedWorld(world) || ThunderdeepHuntConfig::IsDedicatedWorld(world)) return true;
-    const auto map = world->GetName();
-    if (map.find("arena_ramsgate_00") == std::string::npos && map.find("dia_moss_triforce") == std::string::npos
-        && map.find("training_dojo_persistent") == std::string::npos) return false;
     auto* stateType = UObject::FindClassFast("ArchonGameState");
-    if (!stateType || !world->GameState->IsA(stateType)) return false;
-    const auto hunt = static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString();
-    if (TestArenaPolicy::IsArena(FeatureSupport::ObjectPath(world), hunt,
-        FeatureSupport::ObjectPath(world->GameState->GameModeClass.Get()))) return true;
-    return hunt.empty() || hunt == "None" || hunt == "CR19_MatchmakerHunt_Beaver" || hunt == "ShatteredIsles_TrainingDojo";
+    return stateType && world->GameState->IsA(stateType);
 }
 inline UWorld* ControllerWorld(AArchonPlayerController* player) {
     auto* levelType = UObject::FindClassFast("Level");
     auto* outer = player ? player->Outer : nullptr;
     return outer && levelType && outer->IsA(levelType) ? static_cast<ULevel*>(outer)->OwningWorld : nullptr;
 }
+// Where the native "Return to Ramsgate" item is offered: every hunt or destination the content
+// registry marks return=1 (packages register them), and the open Trials prototype arena, which has no
+// pursuit ID or hunt-results exit (foundation behaviour; replicated mode and exact world scope exclude
+// cities and ordinary hunts).
 inline bool IsLabReturnWorld(UWorld* world) {
-    if (!IsFrostArenaClient(world)) return false;
+    if (!IsReturnClient(world)) return false;
     const auto hunt = static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString();
-    if (TestArenaPolicy::IsArena(FeatureSupport::ObjectPath(world), hunt,
-        FeatureSupport::ObjectPath(world->GameState->GameModeClass.Get()))) return true;
-    if (FrostHuntConfig::IsDedicatedWorld(world) || ThunderdeepHuntConfig::IsDedicatedWorld(world)) return true;
-    // The open Trials prototype has no pursuit ID or hunt-results exit. Keep
-    // the native return available even after its manually spawned target dies.
-    // Replicated mode + exact world scope exclude cities and ordinary hunts.
     auto* mode = world->GameState->GameModeClass.Get();
+    const auto worldPath = FeatureSupport::ObjectPath(world);
+    if (Vibeless::Content().OffersReturn(ContentRegistry::WorldPackage(worldPath), hunt,
+        mode ? FeatureSupport::ObjectPath(mode) : std::string())) return true;
     return (hunt.empty() || hunt == "None")
-        && FeatureSupport::ObjectPath(world) == "/Game/Maps/islands/arenas/arena_ramsgate_00.arena_ramsgate_00"
+        && worldPath == "/Game/Maps/islands/arenas/arena_ramsgate_00.arena_ramsgate_00"
         && mode && FeatureSupport::ObjectPath(mode) == "/Game/Blueprints/BPGM_Archon_Prototype.BPGM_Archon_Prototype_C";
 }
 inline void ClearTravel(const char* reason) {

@@ -3,26 +3,35 @@
 #include "OriginalStrengthPolicy.h"
 #include "FeatureSupport.h"
 #include "HuntWorld.h"
-#include "FrostHuntConfig.h"
-#include "ThunderdeepHuntConfig.h"
+#include "HuntPortPolicy.h"
+#include "VibelessContent.h"
 
 namespace OriginalStrength {
 using namespace SDK;
 inline UWorld* LastWorld = nullptr;
 inline OriginalStrengthPolicy::SpawnRestorer Restorer;
 inline std::set<std::string> Reported;
+// An authoritative hunt server running a hunt the content registry knows.
+inline bool IsRegisteredHuntServer(UWorld* world, int port) {
+    if (!FeatureSupport::IsExpectedProcess() || !HuntPortPolicy::IsHunt(port) || !world || !world->GameState
+        || !world->AuthorityGameMode || !world->AuthorityGameMode->HasAuthority()) return false;
+    auto* type = UObject::FindClassFast("ArchonGameState");
+    if (!type || !world->GameState->IsA(type)) return false;
+    const auto* entry = Vibeless::Content().WorldEntry(ContentRegistry::WorldPackage(FeatureSupport::ObjectPath(world)),
+        static_cast<AArchonGameState*>(world->GameState)->MatchmakerHuntID.ToString());
+    return entry && entry->Type == ContentRegistry::Entry::Kind::Hunt;
+}
 inline void Tick(UWorld* world, UNetDriver* driver, int port) {
     if (world != LastWorld) { LastWorld = world; Restorer.Reset(); Reported.clear(); }
     if (!world || !driver || world->NetDriver != driver || driver->ServerConnection
-        || (!FrostHuntConfig::IsDedicatedServer(world, port)
-            && !ThunderdeepHuntConfig::IsDedicatedServer(world, port))) return;
+        || !IsRegisteredHuntServer(world, port)) return;
     auto* mode = HuntWorld::IslandMode(world);
     auto* state = HuntWorld::State(world);
     if (!mode || !state || mode->Class->GetName() != "BPGM_Archon_Prototype_C"
         || mode->SpawnedBehemoths.Num() < 0 || mode->SpawnedBehemoths.Num() > 128) return;
     for (auto* monster : mode->SpawnedBehemoths) {
         if (!monster || !monster->Class || monster->IsDefaultObject() || monster->IsActorBeingDestroyed()) continue;
-        const auto expected = OriginalStrengthPolicy::Expected(port, state->MatchmakerHuntID.ToString(), FeatureSupport::ObjectPath(monster->Class));
+        const auto expected = OriginalStrengthPolicy::Expected(Vibeless::Content(), port, state->MatchmakerHuntID.ToString(), FeatureSupport::ObjectPath(monster->Class));
         if (!expected) continue;
         const bool ready = monster->HasAuthority() && monster->Controller && monster->GetCurrentHealth() > 0
             && HuntWorld::Contains(state->SpawnedBehemoths, monster);

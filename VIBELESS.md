@@ -67,6 +67,13 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
     box and closes before joining a world. A server with packages refuses matchmaking (Ramsgate
     included) for players without a matching report; a server without packages accepts clients that
     run no features. Compositions made before this change must be composed again.
+14. Content registry (Phase 2; `ContentRegistry.h`, `VibelessContent.h`): the shared creature/hunt
+    services no longer name any package's content. Authored strength restoration, hunt-menu
+    recommendations and the native Return to Ramsgate item read the hunts and destinations packages
+    register (composed into `native/registry.txt`; read from `DR_TABLES_DIR` on game servers and
+    `<profile>/tables` on the client). The runtime report shows the registry's source and entry count;
+    malformed lines and a hunt claimed by two packages are reported as errors. Equipment, recipes and
+    loot come from packages' cooked tables and need no registration yet.
 
 ## Verification status (2026-10-20)
 

@@ -1,4 +1,5 @@
 #include "../OriginalStrengthPolicy.h"
+#include "registry-fixture.h"
 #include <cassert>
 #include <iostream>
 #include <limits>
@@ -12,6 +13,8 @@ struct Actor {
 };
 int main() {
     using namespace OriginalStrengthPolicy;
+    const auto registry = BackportRegistry();
+    const auto Expected = [&](int port, const char* hunt, const char* actorClass) { return OriginalStrengthPolicy::Expected(registry, port, hunt, actorClass); };
     constexpr auto frost = "Frost144_MatchmakerHunt_Gnasher";
     constexpr auto drask = "Thunderdeep144_MatchmakerHunt_Drask";
     constexpr auto frostClass = "/Game/Monsters/frost144/mcbeaver_frost_bp.mcbeaver_frost_bp_C";
@@ -21,6 +24,8 @@ int main() {
     assert(!Expected(8760, drask, frostClass));
     assert(!Expected(8760, frost, draskClass));
     assert(!Expected(8760, frost, "/Game/Monsters/mcrollin/mcbeaver_normal_bp.mcbeaver_normal_bp_C"));
+    // Nothing is restored without a registration (core-only profile).
+    assert(!OriginalStrengthPolicy::Expected(ContentRegistry::Registry{}, 8760, frost, frostClass));
     SpawnRestorer restorer;
     for (int port = 8760; port <= 8765; ++port) {
         for (bool isFrost : {true, false}) {

@@ -160,7 +160,10 @@ int main() {
         assert(Contains(report, "{\"id\": \"hunt-services\", \"version\": \"1.0.0\", \"enabled\": true}"));
         assert(Contains(report, "\"reason\": \"not in DR_FEATURES\""));
         assert(Contains(report, "\"name\": \"Engine \\\"tick\\\"\", \"owner\": \"core\", \"active\": true"));
-        assert(Contains(report, "\"errors\": []"));
+        assert(Contains(report, "\"errors\": []") && Contains(report, "\"info\": {}"));
+        host.SetInfo("contentRegistry", "C:/P/tables/native/registry.txt");
+        host.SetInfo("contentEntries", "3");
+        assert(Contains(host.Report("0.1.0", 0), "\"info\": {\"contentEntries\": \"3\", \"contentRegistry\": \"C:/P/tables/native/registry.txt\"}"));
         assert(Host::Quote(std::string("a\nb")) == "\"a\\u000ab\"");
     }
 

@@ -154,6 +154,8 @@
     <ClInclude Include="FeatureHost.h" />
     <ClInclude Include="FeatureSupport.h" />
     <ClInclude Include="Compatibility.h" />
+    <ClInclude Include="ContentRegistry.h" />
+    <ClInclude Include="VibelessContent.h" />
     <ClInclude Include="VibelessCompatibility.h" />
     <ClInclude Include="VibelessFeatures.h" />
     <ClInclude Include="VibelessVersion.h" />
