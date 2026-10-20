@@ -114,6 +114,26 @@ const walk = (folder) => {
     }
 };
 walk(out);
+// Contract versions a launcher or package checks against, read from the sources so they cannot drift.
+const source = (file) => fs.readFileSync(path.join(root, "UndauntedInternalServer", file), "utf8");
+const versionIn = (file, pattern) => {
+    const found = pattern.exec(source(file));
+    if (!found) throw new Error(`Contract version not found in ${file}`);
+    return Number(found[1]);
+};
+const nativeFeatures = [...source("VibelessFeatures.h").matchAll(/\.Id = "([a-z0-9-]+)";/g)].map((m) => m[1]);
+if (nativeFeatures.length === 0) throw new Error("No native features found in VibelessFeatures.h");
+const contracts = {
+    featureApi: versionIn("FeatureHost.h", /inline constexpr int ApiVersion = (\d+);/),
+    contentRegistry: versionIn("ContentRegistry.h", /"vibeless-registry (\d+)"/),
+    compatibility: versionIn("Compatibility.h", /"vibeless-requirements (\d+)"/),
+    packageSchema: 0,
+    nativeFeatures,
+    composedTables: ["deploy/player_hunts_table.json", "deploy/matchmaker_hunts_table.json", "deploy/hunt_rules.json",
+        "metagame/hunt_titles.json", "native/registry.txt", "composition.json"],
+    settings: ["DR_PROFILE_ROOT", "DR_FEATURES", "DR_TABLES_DIR", "DR_METAGAME_ADDRESS", "DR_CELL_FUSION_HOURS",
+        "DR_AUTO_PRESS_START", "DR_DUALSENSE", "DR_COMPATIBILITY_CHECK", "INVENTORY_REFUSE_OVERSPEND"]
+};
 const manifest = {
     schema: 1,
     name: "vibeless-foundation",
@@ -124,6 +144,7 @@ const manifest = {
     toolchain: { node: process.version, npm: run("npm", ["--version"]), msvc: args.msvc ?? "unrecorded" },
     game: { client: "Dauntless 1.4.4 (CL 239827)", exeSha256: GAME_EXE_SHA256, supplied: "by the user; never bundled" },
     proxyLoader: { installed: "native/dxgi.dll", origin: "upstream prebuilt, source unpublished", candidate: args.proxy ? "native/candidate-proxy/dxgi.dll" : null },
+    contracts,
     runtimes: { features: "native/UndauntedInternalServer.dll", coreOnly: args["core-dll"] ? "native/core-only/UndauntedInternalServer.dll" : null },
     node: args.node ? { path: "runtime/node.exe", version: execFileSync(path.resolve(args.node), ["--version"], { encoding: "utf8" }).trim() } : null,
     files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)))
