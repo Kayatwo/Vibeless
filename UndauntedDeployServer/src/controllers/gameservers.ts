@@ -54,9 +54,6 @@ let FreePorts: number[] = [];
 
 let RamsgateServer : Gameserver | undefined;
 let TrainingDojoServer : Gameserver | undefined;
-// Lab-only arena resets serialize with SHARED allocations. Never target a PID
-// discovered outside this deploy service's own SpawnedChildren map.
-let DevWorldReset: Promise<{ stopped: boolean; serverPid: number | null }> | undefined;
 
 // How game processes are started and checked. Tests swap in stand-ins (UseProcessFunctionsForTests);
 // nothing else changes them.
@@ -176,9 +173,6 @@ function CurrentPersistentWorld(World: PersistentWorld){
 // The record of a restarted world is stored here, so the next check looks at the new process.
 // (Upstream's watchdog restart kept the old record, whose process had exited.)
 function EnsurePersistentWorld(World: PersistentWorld, Why?: string, Level: "info" | "warn" = "warn"): Promise<Gameserver> {
-    if (World === "dojo" && DevWorldReset) {
-        return DevWorldReset.then(() => EnsurePersistentWorld(World, Why, Level));
-    }
     const Launching = PersistentWorldLaunches.get(World);
 
     if(Launching !== undefined){
@@ -433,8 +427,6 @@ export async function GetRamsgateConnectionDetails(size = 1){
 // visit, and on a single home PC that memory matters. Concurrent first
 // requests share one launch instead of racing to start two.
 export async function GetTrainingDojoConnectionDetails(){
-    if (DevWorldReset)
-        await DevWorldReset;
     let Server = TrainingDojoServer;
 
     if(Server === undefined){
@@ -449,55 +441,6 @@ export async function GetTrainingDojoConnectionDetails(){
         port: Server.port,
         sessionId: Server.id
     };
-}
-
-function ResetDevWorld(): Promise<{ stopped: boolean; serverPid: number | null }> {
-    if (process.env.DOJO144_DEV !== "1")
-        return Promise.reject(new Error("Arena reset is available only in the isolated Dojo144 lab"));
-    if (DevWorldReset)
-        return DevWorldReset;
-    DevWorldReset = Promise.resolve().then(async () => {
-        const Pending = PersistentWorldLaunches.get("dojo");
-        if (Pending)
-            await Pending.catch(() => { });
-        const Matches = Gameservers.filter(s => s.isTrainingDojo && !s.isRamsgate);
-        if (Matches.length > 1)
-            throw new Error("Multiple tracked arenas exist; refusing an ambiguous reset");
-        const Current = TrainingDojoServer ?? Matches[0];
-        if (!Current)
-            return { stopped: false, serverPid: null };
-        const Child = SpawnedChildren.get(Current.id);
-        if (!Gameservers.includes(Current) || !Current.isTrainingDojo || Current.isRamsgate || Current.port !== TRAINING_DOJO_PORT ||
-            !Child || Child.pid !== Current.processId)
-            throw new Error("Arena process ownership could not be verified; nothing was stopped");
-        if (Child.exitCode === null && Child.signalCode == null) {
-            await new Promise<void>((Resolve, Reject) => {
-                const OnClose = () => { clearTimeout(Deadline); Resolve(); };
-                const Deadline = setTimer(() => {
-                    Child.off("close", OnClose);
-                    Reject(new Error("Arena did not close within 15 seconds; no replacement was launched"));
-                }, 15000);
-                Child.once("close", OnClose);
-                try {
-                    if (!Child.killed && !Child.kill()) {
-                        clearTimeout(Deadline);
-                        Child.off("close", OnClose);
-                        Reject(new Error("Tracked arena refused the stop request"));
-                    }
-                }
-                catch (Error) {
-                    clearTimeout(Deadline);
-                    Child.off("close", OnClose);
-                    Reject(Error);
-                }
-            });
-        }
-        await CleanupServer(Current);
-        if (TrainingDojoServer === Current)
-            TrainingDojoServer = undefined;
-        return { stopped: true, serverPid: Current.processId };
-    }).finally(() => { DevWorldReset = undefined; });
-    return DevWorldReset;
 }
 
 export async function StartupGameserverWithArgs(GameArgs: string){
@@ -905,11 +848,9 @@ export function ResetGameserversForTests(){
     TrainingDojoServer = undefined;
     PersistentWorldLaunches.clear();
     ShuttingDown = false;
-    DevWorldReset = undefined;
 }
 
 export function GameserverStateForTests(){
     return { FreePorts: [...FreePorts], Ramsgate: RamsgateServer, Dojo: TrainingDojoServer };
 }
 
-export { ResetDevWorld };

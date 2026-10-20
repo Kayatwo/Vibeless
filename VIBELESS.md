@@ -33,7 +33,8 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
 1. `TArray` allocation hardening, SDK delegate assert fix, crash-report script frames, array tests.
 2. Backport native features from the installed release: shared creature services, Deepfrost
    Gnasher, Thunderdeep Drask, Test Arena and opt-in reward diagnostics. The parked development
-   probes and the developer arena were retired in Phase 2 (decision D10); they remain in history.
+   probes, the developer arena and the deploy server's lab-only arena reset were retired in Phase 2
+   (decision D10); they remain in history.
 3. Deploy/metagame TypeScript reproducing the installed JavaScript snapshots (see
    Reconciliation below).
 4. Overspend refusal on by default; `INVENTORY_REFUSE_OVERSPEND=0` restores upstream clamping.
