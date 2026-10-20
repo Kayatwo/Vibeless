@@ -62,7 +62,7 @@ body:
     attributes:
       label: Commit or bundle version
       description: The commit you built (`git rev-parse --short HEAD`), or `version` from the bundle's foundation-manifest.json.
-      placeholder: e.g. 0.1.0+0c4443198fd0
+      placeholder: e.g. 0.1.0+db3c19428a47
     validations:
       required: true
   - type: textarea

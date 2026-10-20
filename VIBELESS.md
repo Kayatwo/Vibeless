@@ -12,14 +12,19 @@ is always supplied by the user and is never part of this repository or its relea
 | `upstream/dauntless-revived` | Read-only mirror of `mixutin/dauntless-revived`, branch `dauntless-revived`. Never commit here. |
 | `import/c39bcfa` → `c39bcfa1b1a626c888416ef32f8b420082d7ead7` | The upstream commit the backport lab was built from (v0.0.5, 2026-10-17). |
 | `main` | Vibeless integration branch, rooted at `import/c39bcfa`. |
-| `reconciled/installed-2026-10-19` → `b6e049ebef73f4e33a136cc8f4af779ded249e79` | Source equivalent to the backport release installed on 2026-10-19 (runtime `9fe01048…3546`, BackportDev tag `installed-2026-10-19-test-arena`). |
+| `reconciled/installed-2026-10-19` → `9eaa6992f6141283738d676ef9bc457b01894c09` | Source equivalent to the backport release installed on 2026-10-19 (runtime `9fe01048…3546`, BackportDev tag `installed-2026-10-19-test-arena`). |
+
+On 2026-10-20, before the repository became public, the Vibeless commits on `main` were rewritten
+once to replace a personal author email with a GitHub no-reply address. Contents are unchanged; commit
+IDs quoted in records written before then (for example in the BackportDev workspace) refer to the
+earlier IDs. This file uses the new ones.
 
 The two tags are recorded here because the session that created the repository could not push
 tags. To create them from any clone:
 
 ```sh
 git tag -a import/c39bcfa c39bcfa1b1a626c888416ef32f8b420082d7ead7 -m "Upstream dauntless-revived commit imported into BackportDev"
-git tag -a reconciled/installed-2026-10-19 b6e049ebef73f4e33a136cc8f4af779ded249e79 -m "Fork source equivalent to the release installed on 2026-10-19"
+git tag -a reconciled/installed-2026-10-19 9eaa6992f6141283738d676ef9bc457b01894c09 -m "Fork source equivalent to the release installed on 2026-10-19"
 git push origin import/c39bcfa reconciled/installed-2026-10-19
 ```
 
@@ -66,21 +71,21 @@ git push origin import/c39bcfa reconciled/installed-2026-10-19
 
 CI on `main` passes the backend suites (deploy, metagame, gateway, content), portable and Windows
 native tests, the default and core-only DLL builds, the proxy loader test and the bundle assembly;
-the full run on `101e7e1` succeeded. The OpenBSD server-port job is intermittent on upstream and
+the full run on `4f6cee5` succeeded. The OpenBSD server-port job is intermittent on upstream and
 Vibeless alike (its VM wrapper reports "ssh exited with code 1"); Vibeless does not ship the OpenBSD
 port, so the job is marked `continue-on-error` and no longer decides the run.
-First real-game test (2026-10-20, bundle `0.1.0+f9f1ecbe6bb2`, upstream proxy, fresh accounts): the
+First real-game test (2026-10-20, bundle `0.1.0+1f2bbf480c4f`, upstream proxy, fresh accounts): the
 features runtime ran the tutorial, Ramsgate, the original Training Grounds, a pursuit hunt and the Test
 Arena; the core-only runtime ran the tutorial, Ramsgate and Training Grounds; service logs were clean.
 A second session confirmed that progress survives a full restart, and a connection watch saw no TCP
 connection from the client, game servers or services to anything but the local PC (UDP and DNS not
-observed). The Phase 2 build `2abd1ff` (feature host, composed hunt tables) was checked in game on
+observed). The Phase 2 build `f1bb657` (feature host, composed hunt tables) was checked in game on
 2026-10-20: the features profile's runtime reports listed its four features and every hook owner with no
 errors, the Test Arena session (now a composed hunt rule) spawned, despawned and returned to Ramsgate, and
 Training Grounds stayed original; the core profile reported no features, used the bundled tables and ran
 Ramsgate and Training Grounds. Not yet verified: backport pursuits on a progressed account, the Vibeless proxy loader in
 game, clean-machine and offline installation, and upgrade/rollback.
-The compatibility contract (`68e745b` onwards) was tried in game once: requirements were served, the
+The compatibility contract (`621e37a` onwards) was tried in game once: requirements were served, the
 client reported and showed its message box, but flagged the internal `hunt-services` feature. The fix
 (internal features are left out of the contract) still needs a CI build and an in-game check.
 

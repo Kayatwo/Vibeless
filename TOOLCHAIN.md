@@ -14,9 +14,9 @@ release; "CI" means `.github/workflows/ci.yml` on GitHub-hosted runners.
 | Generated SDK | 4,148 files from Dumper-7 plus the `Basic.hpp` assert fix | Tracked in `UndauntedInternalServer/SDK` | **Pin:** LF-normalized aggregate `6884c491043d44e810e6a2c13c2c65797b2e9be9a6d0536853bb4f8e22f4bc7e` (sorted path, NUL, lowercase file SHA-256, LF), 63,849,377 bytes normalized. BackportDev's byte pin `41cb7207…629c` is the same content with CRLF. |
 
 The DLL is not expected to be byte-identical across compilers or builds; a release records its own
-DLL hash, compiler version and source commit. Observed 2026-10-19: commits `9dbef4c` and `ab7e25a`
+DLL hash, compiler version and source commit. Observed 2026-10-19: commits `a204889` and `f5ff5a5`
 have identical native sources, yet CI produced different DLL hashes (`0ea84484…` vs `fdd54412…`)
-and proxy hashes on the same compiler. Since `f5a079a` the Release x64 build uses `/Brepro` and
+and proxy hashes on the same compiler. Since `56fddc3` the Release x64 build uses `/Brepro` and
 `/PDBALTPATH:%_PDB%`: two clean builds in the Server DLL job and the independent build in the bundle
 job (another runner) all gave `f89cb8ba861ccf1c4e127e6224fa93f31c3d8572ff6b589aca1c4608dd18ae40`.
 CI now fails if two clean builds differ. This holds for the same compiler version; a different
