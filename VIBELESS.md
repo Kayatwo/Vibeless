@@ -65,7 +65,11 @@ features runtime ran the tutorial, Ramsgate, the original Training Grounds, a pu
 Arena; the core-only runtime ran the tutorial, Ramsgate and Training Grounds; service logs were clean.
 A second session confirmed that progress survives a full restart, and a connection watch saw no TCP
 connection from the client, game servers or services to anything but the local PC (UDP and DNS not
-observed). Not yet verified: backport pursuits on a progressed account, the Vibeless proxy loader in
+observed). The Phase 2 build `2abd1ff` (feature host, composed hunt tables) was checked in game on
+2026-10-20: the features profile's runtime reports listed its four features and every hook owner with no
+errors, the Test Arena session (now a composed hunt rule) spawned, despawned and returned to Ramsgate, and
+Training Grounds stayed original; the core profile reported no features, used the bundled tables and ran
+Ramsgate and Training Grounds. Not yet verified: backport pursuits on a progressed account, the Vibeless proxy loader in
 game, clean-machine and offline installation, and upgrade/rollback.
 
 ## Profiles and settings
