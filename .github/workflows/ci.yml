@@ -70,8 +70,16 @@ jobs:
 
       # UndauntedContent's test:integration is not run here: it serves a real 1.4.4 install, which CI
       # does not have (without one every test in it is skipped).
+      # Failing lines also go out as annotations: they are readable through the API when logs are not.
       - name: Unit tests
-        run: npm test
+        run: |
+          npm test 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/unit-tests.log"
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Select-String -Path "$env:RUNNER_TEMP/unit-tests.log" -Pattern '^\s*not ok|AssertionError|error TS\d+|^\s*(Error|TypeError|ReferenceError)\b|^\s*(expected|actual):|^\s*[+-] ' |
+              Select-Object -First 45 | ForEach-Object { Write-Output ('::error::' + $_.Line.Trim()) }
+          }
+          exit $code
 
   launcher:
     name: Launcher
