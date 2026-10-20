@@ -322,6 +322,9 @@ const EXPECTED_ROUTES = [
     "POST /loadout/:userId/:characterId/active/:index [RealProgressionOnly, HasUndauntedMetagameAuth]",
     "GET /loadout/:userId/:characterId/all [HasUndauntedMetagameAuth]",
     "POST /loadout/:userId/:characterId/:index [HasUndauntedMetagameAuth]",
+    // Vibeless compatibility contract: requirements are public (IDs, versions, hashes); a report needs the account key
+    "GET /vibeless/requirements []",
+    "POST /vibeless/compatibility [HasUndauntedUserApiKey, textParser]",
     "POST /undaunted/api/DeviceSignals [HasUndauntedUserApiKey]",
     "GET /undaunted/api/HuntRegion [HasUndauntedUserApiKey]",
     "POST /undaunted/api/HuntRegion [HasUndauntedUserApiKey]",
