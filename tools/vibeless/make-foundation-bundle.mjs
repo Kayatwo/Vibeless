@@ -127,7 +127,7 @@ const contracts = {
     featureApi: versionIn("FeatureHost.h", /inline constexpr int ApiVersion = (\d+);/),
     contentRegistry: versionIn("ContentRegistry.h", /"vibeless-registry (\d+)"/),
     compatibility: versionIn("Compatibility.h", /"vibeless-requirements (\d+)"/),
-    packageSchema: 0,
+    packageSchema: 1,
     nativeFeatures,
     composedTables: ["deploy/player_hunts_table.json", "deploy/matchmaker_hunts_table.json", "deploy/hunt_rules.json",
         "metagame/hunt_titles.json", "native/registry.txt", "composition.json"],

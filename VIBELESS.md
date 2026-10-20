@@ -149,7 +149,7 @@ The interfaces packages and a launcher rely on. Each has a version; the bundle p
 | Content registry (`native/registry.txt`) | `vibeless-registry 1` | `ContentRegistry.h` | New optional fields keep the version; unknown fields are refused, so adding one is a foundation minor release. |
 | Composed tables (`DR_TABLES_DIR`) | `deploy/*`, `metagame/hunt_titles.json`, `native/registry.txt`, `composition.json` | `hunttables.ts`, `serverstatus.ts`, `compatibility.ts` | All files must be present; a missing or invalid one stops the service. |
 | Compatibility contract | `vibeless-requirements 1` / `vibeless-client 1` | `Compatibility.h`, metagame `compatibility.ts` | Client and server must agree on the version; the foundation's major.minor must match. |
-| Package manifest | schema 0 (draft) | BackportDev `docs/PACKAGE-SPEC.md` | Becomes schema 1 when the launcher's package manager is specified (Phase 4). |
+| Package manifest | schema 1 | BackportDev `docs/PACKAGE-SPEC.md` (the launcher's package manager) | A new schema number means a launcher that reads it is needed; the bundle publishes the number it was built for. |
 
 Native extension strategy (Phase 2 decision): native features are compiled into this runtime and
 enabled per profile; packages are data (cooked content, composed tables, registrations) plus the
