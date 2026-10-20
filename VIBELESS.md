@@ -99,6 +99,11 @@ client named "backport.test-arena 1.0.0: ZZ_TestArena144_P.pak is missing." in i
 closed, and with the client check off (`DR_COMPATIBILITY_CHECK=off`) the metagame refused its
 matchmaking for the same reason. (An earlier build flagged the internal `hunt-services` feature; fixed
 in `63bb307`.)
+The content registry (`a8e52fa`) was checked in game the same day: the features profile's client and
+game servers loaded 3 registrations with no errors, and the Test Arena's Return to Ramsgate item, which
+the stock game hides there, was shown from the registry and took the player back to Ramsgate. The
+strength and recommendation paths need the Deepfrost and Thunderdeep pursuits, which wait for the
+launcher.
 
 ## Profiles and settings
 
