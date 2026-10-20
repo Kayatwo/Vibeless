@@ -54,8 +54,10 @@ port, so the job is marked `continue-on-error` and no longer decides the run.
 First real-game test (2026-10-20, bundle `0.1.0+f9f1ecbe6bb2`, upstream proxy, fresh accounts): the
 features runtime ran the tutorial, Ramsgate, the original Training Grounds, a pursuit hunt and the Test
 Arena; the core-only runtime ran the tutorial, Ramsgate and Training Grounds; service logs were clean.
-Not yet verified: backport pursuits on a progressed account, restart persistence, the Vibeless proxy
-loader in game, clean-machine and offline installation, and upgrade/rollback.
+A second session confirmed that progress survives a full restart, and a connection watch saw no TCP
+connection from the client, game servers or services to anything but the local PC (UDP and DNS not
+observed). Not yet verified: backport pursuits on a progressed account, the Vibeless proxy loader in
+game, clean-machine and offline installation, and upgrade/rollback.
 
 ## Profiles and settings
 
