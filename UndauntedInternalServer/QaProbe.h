@@ -1,8 +1,11 @@
 // QA engine probe (W2): on a dedicated arena server that `vibeless probe` starts for a qa-* profile,
-// load every object of a creature package, spawn the creature (and an optional stock control) and
-// sample their poses. reports/qa-probe-<id>.json is rewritten before and after every stage, so a
-// crash or stall leaves the stage and asset in progress; the launcher adds exit code and crash
-// evidence. Rules and report format: QaProbePolicy.h. AGPL-3.0-only.
+// load every object of a creature package, spawn the creature (and an optional stock control), sample
+// their poses, then stop the creature's AI and force every row of its action-set table (the row's
+// montage, its notifies and spawned actors), damage every monster part and finally kill both
+// subjects (the control shows whether a forced call works at all). reports/qa-probe-<id>.json is
+// rewritten before and after every stage, so a crash or stall leaves the stage and asset in progress;
+// the launcher adds exit code and crash evidence. Rules and report format: QaProbePolicy.h.
+// AGPL-3.0-only.
 #pragma once
 #include "QaProbePolicy.h"
 #include "FeatureSupport.h"
@@ -12,10 +15,15 @@
 #include "SDK/bp_gamemode_behemoth_spawner_component_parameters.hpp"
 #include "SDK/bp_gamemode_behemoth_spawner_component_classes.hpp"
 #include "SDK/NavigationSystem_classes.hpp"
+#include "SDK/AIModule_classes.hpp"
+#include "SDK/AIModule_parameters.hpp"
+#include "SDK/monsterpart_bpc_classes.hpp"
+#include "SDK/monsterpart_bpc_parameters.hpp"
+#include "SDK/Struct_ActionSet_structs.hpp"
 
 namespace QaProbe {
 using namespace SDK;
-enum class Phase { Start, World, Load, Spawn, Sample, Finish, Idle };
+enum class Phase { Start, World, Load, Spawn, Sample, Actions, Parts, Kill, Finish, Idle };
 inline Phase Current = Phase::Start;
 inline QaProbePolicy::Request Request;
 inline QaProbePolicy::Report Report;
@@ -23,6 +31,7 @@ inline std::filesystem::path ReportPath;
 inline ULONGLONG PhaseStart = 0, NextSample = 0, SampleEnd = 0;
 struct Live { AArchonBehemoth* Actor = nullptr; FVector Origin{}; std::vector<FName> Bones; };
 inline std::vector<Live> Actors;  // parallel to Report.Subjects
+inline std::vector<std::pair<UObject*, int32>> Loaded;  // package objects that loaded, with their object index
 
 inline std::string Narrow(const std::wstring& text) {
     std::string out;
@@ -160,6 +169,273 @@ inline AArchonBehemoth* Spawn(UWorld* world, UClass* type, const FVector& locati
     return monster;
 }
 
+// Stage "load": blocking loads on the game thread; the report names each object before it loads.
+// `objects` receives what loaded (with its object index, to check it is still alive later).
+inline void LoadStage(std::vector<std::pair<UObject*, int32>>* objects = nullptr) {
+    PhaseStart = GetTickCount64();
+    auto& stage = Report.Begin("load");
+    for (const auto& asset : Request.Assets) {
+        Report.CurrentAsset = asset;
+        Write();
+        const auto wide = Wide(asset);
+        UObject* object = UKismetSystemLibrary::LoadAsset_Blocking(UKismetSystemLibrary::Conv_SoftObjPathToSoftObjRef(
+            UKismetSystemLibrary::MakeSoftObjectPath(FString(wide.c_str()))));
+        // Cooked Blueprint packages keep only their generated class: <package>.<name>_C.
+        if (!object) if ((object = LoadClass(asset + "_C"))) ++Report.AssetsAsClass;
+        if (object) { ++Report.AssetsLoaded; if (objects) objects->push_back({object, object->Index}); }
+        else Report.FailedAssets.push_back(asset);
+    }
+    Report.CurrentAsset.clear();
+    stage.Seconds = Seconds(PhaseStart);
+    if (Report.FailedAssets.empty()) stage.Status = "ok";
+    else Report.Fail(stage, std::to_string(Report.FailedAssets.size()) + " of " + std::to_string(Report.AssetsRequested) + " objects did not load");
+}
+// Stage "class": the creature (and control) classes load and derive from AArchonBehemoth. Adds one
+// report subject per class; false when the probe cannot go on.
+inline bool ClassStage(std::vector<std::pair<std::string, UClass*>>& types) {
+    PhaseStart = GetTickCount64();
+    auto& classes = Report.Begin("class");
+    Write();
+    for (const auto& [role, path] : {std::pair<std::string, std::string>{"creature", Request.Creature}, {"control", Request.Control}}) {
+        if (path.empty()) continue;
+        auto* type = LoadClass(path);
+        QaProbePolicy::Subject subject; subject.Role = role; subject.Class = path;
+        Report.Subjects.push_back(subject);
+        types.push_back({role, type});
+        if (!type || !IsBehemoth(type)) Report.Fail(classes, role + " class " + (type ? "is not a behemoth" : "did not load"));
+    }
+    classes.Seconds = Seconds(PhaseStart);
+    if (classes.Status == "running") classes.Status = "ok";
+    return classes.Status == "ok";
+}
+
+// ---- Forced actions -------------------------------------------------------------------------
+// One row of a package action-set table (row struct Struct_ActionSet): the attack class and its montage.
+struct ActionRow { std::string Row; UClass* Action = nullptr; UAnimMontage* Montage = nullptr; float Rate = 1; };
+inline std::vector<ActionRow> ActionRows;
+inline size_t ActionIndex = 0;
+inline ULONGLONG ActionStart = 0, ActionEnd = 0, NextAction = 0;
+inline std::set<AActor*> ActionActors;  // owned or instigated by the creature before/while the action plays
+inline int ActionNotifies = 0, ActionSpawned = 0;
+
+inline std::vector<ActionRow> ActionTable() {
+    std::vector<ActionRow> rows;
+    for (const auto& [object, index] : Loaded) {
+        if (UObject::GObjects->GetByIndex(index) != object || !object->IsA(UDataTable::StaticClass())) continue;
+        auto* table = static_cast<UDataTable*>(object);
+        if (!table->RowStruct || table->RowStruct->GetName() != "Struct_ActionSet" || table->RowMap.NumAllocated() < 0 || table->RowMap.NumAllocated() > 1024) continue;
+        for (int i = 0; i < table->RowMap.NumAllocated() && rows.size() < static_cast<size_t>(QaProbePolicy::MaxActions); ++i) {
+            if (!table->RowMap.IsValidIndex(i)) continue;
+            auto* row = reinterpret_cast<FStruct_ActionSet*>(table->RowMap[i].Value());
+            if (!row) continue;
+            const float rate = row->MontagePlayRate_8_A41689FE4E224D7BD13F658E91AA77C2;
+            rows.push_back({table->RowMap[i].Key().ToString(), row->Class_38_A2E813EE429E126ADF2E999DA085A8F6,
+                row->Montage_5_69C9740F43CE4938ABF4AEBB9EDD1279, rate > 0 && rate < 10 ? rate : 1.f});
+        }
+    }
+    return rows;
+}
+// Actors the creature owns or instigated that are not yet in ActionActors; adds them.
+inline int NewOwnedActors(UWorld* world, AArchonBehemoth* monster) {
+    TArray<AActor*> actors;
+    UGameplayStatics::GetAllActorsOfClass(world, AActor::StaticClass(), &actors);
+    int added = 0;
+    for (auto* actor : actors)
+        if (actor && actor != monster && (actor->Owner == monster || actor->Instigator == monster) && ActionActors.insert(actor).second) ++added;
+    return added;
+}
+struct LiveKill { size_t Subject = 0, Result = 0; };
+inline std::vector<LiveKill> LiveKills;
+// Server ProcessEvent, after the original: Blueprint notifies on the creature's mesh while an action
+// plays (native notifies such as sounds do not pass through ProcessEvent), and functions named for
+// death that run on each subject during the kill stage.
+inline void ObserveServerEvent(UObject* object, UFunction* function, void* parameters) {
+    if (!object || !function || Actors.empty()) return;
+    if (Current == Phase::Kill) {
+        for (const auto& live : LiveKills) {
+            if (object != Actors[live.Subject].Actor) continue;
+            auto& events = Report.Kills[live.Result].DeathEvents;
+            const auto name = function->GetName();
+            const bool death = name.find("Death") != std::string::npos || name.find("Died") != std::string::npos || name.find("Dead") != std::string::npos;
+            if (death && events.size() < 8 && std::find(events.begin(), events.end(), name) == events.end()) events.push_back(name);
+        }
+        return;
+    }
+    if (Current != Phase::Actions || ActionEnd == 0 || !parameters || !Actors[0].Actor) return;
+    auto* mesh = Actors[0].Actor->Mesh;
+    if (!mesh) return;
+    const auto name = function->GetName();
+    if (name == "Received_Notify" || name == "Received_NotifyBegin") { if (*static_cast<USkeletalMeshComponent**>(parameters) == mesh) ++ActionNotifies; }
+    else if (name.starts_with("AnimNotify_") && object == mesh->GetAnimInstance()) ++ActionNotifies;
+}
+// Stops the creature's AI so that only the forced actions play. (AIModule's SDK functions are not
+// compiled into the runtime; reflected calls go through ProcessEvent.)
+inline void StopAi(AArchonBehemoth* monster) {
+    auto* controller = monster ? monster->Controller : nullptr;
+    if (!controller || !controller->IsA(AAIController::StaticClass())) return;
+    auto* brain = static_cast<AAIController*>(controller)->BrainComponent;
+    if (auto* stop = FeatureSupport::FindFunction(brain, "StopLogic")) {
+        Params::BrainComponent_StopLogic parameters{};
+        parameters.Reason = FString(L"qa-probe actions");
+        brain->ProcessEvent(stop, &parameters);
+    }
+}
+// One poll of the actions stage; true when it has finished.
+inline bool TickActions(UWorld* world) {
+    const auto now = GetTickCount64();
+    auto* monster = Actors.empty() ? nullptr : Actors[0].Actor;
+    auto& stage = Report.Stages.back();
+    if (!monster || monster->IsActorBeingDestroyed()) { Report.Fail(stage, "the creature was destroyed during the actions"); return true; }
+    auto* anim = monster->Mesh ? monster->Mesh->GetAnimInstance() : nullptr;
+    if (ActionEnd == 0) {
+        if (now < NextAction) return false;
+        if (ActionIndex >= ActionRows.size()) {
+            stage.Seconds = Seconds(PhaseStart);
+            const auto problem = QaProbePolicy::JudgeActions(Report.Actions);
+            if (!problem.empty()) Report.Fail(stage, problem);
+            else stage.Status = "ok";
+            int notifies = 0, spawned = 0;
+            for (const auto& a : Report.Actions) { notifies += a.Notifies; spawned += a.Spawned; }
+            if (stage.Status == "ok") stage.Detail = std::to_string(Report.Actions.size()) + " actions, " + std::to_string(notifies) + " notifies, " + std::to_string(spawned) + " actors spawned";
+            Report.CurrentAsset.clear();
+            return true;
+        }
+        const auto& row = ActionRows[ActionIndex];
+        QaProbePolicy::ActionResult result;
+        result.Row = row.Row; result.Action = FeatureSupport::ObjectPath(row.Action); result.Montage = FeatureSupport::ObjectPath(row.Montage);
+        Report.CurrentAsset = result.Montage.empty() ? result.Action : result.Montage;
+        Report.Actions.push_back(result);
+        Write();  // a crash while it plays leaves the montage in the report
+        NewOwnedActors(world, monster);
+        ActionNotifies = 0; ActionSpawned = 0;
+        float length = 0;
+        if (anim && row.Montage) length = anim->Montage_Play(row.Montage, row.Rate, EMontagePlayReturnType::MontageLength, 0.f, true);
+        auto& played = Report.Actions.back();
+        played.Played = length > 0; played.Length = length;
+        ActionStart = now;
+        const double cap = (std::min)(QaProbePolicy::ActionCapSeconds, length / row.Rate + 1.0);
+        ActionEnd = now + static_cast<ULONGLONG>((std::max)(0.25, cap) * 1000);
+        return false;
+    }
+    ActionSpawned += NewOwnedActors(world, monster);
+    const auto& row = ActionRows[ActionIndex];
+    if (now < ActionEnd && anim && row.Montage && anim->Montage_IsPlaying(row.Montage)) return false;
+    auto& done = Report.Actions.back();
+    done.Seconds = Seconds(ActionStart); done.Notifies = ActionNotifies; done.Spawned = ActionSpawned;
+    ActionEnd = 0;
+    ++ActionIndex;
+    NextAction = now + 500;  // let the montage blend out before the next one
+    Write();
+    return false;
+}
+
+// ---- Part breaks and kill -------------------------------------------------------------------
+// Both subjects get the same forced calls; the stock control shows whether the method works at all.
+struct LivePart { Umonsterpart_bpc_C* Part = nullptr; int32 Index = -1; size_t Result = 0; bool SeveredBefore = false; };
+inline std::vector<LivePart> LiveParts;
+inline ULONGLONG StageEnd = 0;
+
+// The subject's monster parts (the stock Blueprint part component).
+inline std::vector<Umonsterpart_bpc_C*> PartsOf(AArchonBehemoth* monster) {
+    std::vector<Umonsterpart_bpc_C*> parts;
+    if (!monster || monster->IsActorBeingDestroyed()) return parts;
+    auto components = monster->K2_GetComponentsByClass(Umonsterpart_bpc_C::StaticClass());
+    if (components.Num() < 0 || components.Num() > QaProbePolicy::MaxParts) return parts;
+    for (auto* component : components) if (component) parts.push_back(static_cast<Umonsterpart_bpc_C*>(component));
+    return parts;
+}
+// GetMetadataTableName (behemoth interface): the key the actor's loot and metadata rows use (D33).
+inline std::string MetadataKey(AArchonBehemoth* monster) {
+    auto* get = FeatureSupport::FindFunction(monster, "GetMetadataTableName");
+    if (!get) return {};
+    alignas(16) unsigned char frame[512] = {};  // the out FName comes first; the rest is spare frame
+    monster->ProcessEvent(get, frame);
+    return reinterpret_cast<FName*>(frame)->ToString();
+}
+// Records every part with its break stages and loot names, then damages each breakable part by one
+// and a half times its health through its own HandleDamage.
+inline void BeginParts() {
+    LiveParts.clear();
+    for (size_t i = 0; i < Actors.size(); ++i) {
+        for (auto* part : PartsOf(Actors[i].Actor)) {
+            QaProbePolicy::PartResult result;
+            result.Role = Report.Subjects[i].Role; result.Name = part->PartName.ToString();
+            result.Stages = part->PartBreakData.Num(); result.Before = result.After = part->CurrentBreakStage;
+            result.Health = part->UMonsterPartComponent::GetCurrentHealth(); result.MaxHealth = part->UMonsterPartComponent::GetMaxHealth();
+            result.CanBeBroken = part->UMonsterPartComponent::CanBeBroken();
+            result.Breakable = result.Before + 1 < result.Stages;
+            if (auto* loot = FeatureSupport::FindFunction(part, "GetBreakLootName"))
+                for (int stage = 0; stage < result.Stages && stage < 8; ++stage) {
+                    Params::monsterpart_bpc_C_GetBreakLootName query{};
+                    query.BreakIndex = stage;
+                    part->ProcessEvent(loot, &query);
+                    result.Loot.push_back(query.LootName.ToString());
+                }
+            Report.Parts.push_back(result);
+            LiveParts.push_back({part, part->Index, Report.Parts.size() - 1, part->PartSevered});
+        }
+    }
+    for (const auto& live : LiveParts) {
+        const auto& result = Report.Parts[live.Result];
+        auto* damage = result.Breakable ? FeatureSupport::FindFunction(live.Part, "HandleDamage") : nullptr;
+        if (!damage) continue;
+        Report.CurrentAsset = result.Role + " part " + result.Name;
+        Write();  // a crash while it breaks leaves the part in the report
+        Params::monsterpart_bpc_C_HandleDamage hit{};
+        hit.DamageAmount = static_cast<float>((std::max)({result.MaxHealth, result.Health, 1.0}) * 1.5 + 1);
+        hit.ServerHitLoc = live.Part->K2_GetComponentLocation();
+        live.Part->ProcessEvent(damage, &hit);
+    }
+    Report.CurrentAsset.clear();
+}
+inline void EndParts() {
+    for (const auto& live : LiveParts) {
+        if (UObject::GObjects->GetByIndex(live.Index) != live.Part) continue;
+        auto& result = Report.Parts[live.Result];
+        result.After = live.Part->CurrentBreakStage;
+        result.Severed = !live.SeveredBefore && live.Part->PartSevered;
+    }
+}
+// Lethal core damage, ten times the maximum health, through a part's ApplyDamageToCore.
+inline void BeginKill() {
+    LiveKills.clear();
+    for (size_t i = 0; i < Actors.size(); ++i) {
+        auto* monster = Actors[i].Actor;
+        if (!monster || monster->IsActorBeingDestroyed()) continue;
+        QaProbePolicy::KillResult result;
+        result.Role = Report.Subjects[i].Role;
+        result.MetadataKey = MetadataKey(monster);
+        result.HealthBefore = monster->GetCurrentHealth();
+        Report.Kills.push_back(result);
+        LiveKills.push_back({i, Report.Kills.size() - 1});
+        const auto parts = PartsOf(monster);
+        auto* core = parts.empty() ? nullptr : FeatureSupport::FindFunction(parts[0], "ApplyDamageToCore");
+        if (!core) continue;
+        Report.CurrentAsset = result.Role + " kill";
+        Write();
+        Params::monsterpart_bpc_C_ApplyDamageToCore hit{};
+        hit.BaseDamage = (std::max)(monster->GetMaxHealth(), 1.0f) * 10;
+        parts[0]->ProcessEvent(core, &hit);
+    }
+    Report.CurrentAsset.clear();
+}
+// True once every subject died or the wait ended.
+inline bool PollKill(bool last) {
+    bool all = true;
+    for (const auto& live : LiveKills) {
+        auto& result = Report.Kills[live.Result];
+        auto* monster = Actors[live.Subject].Actor;
+        const bool gone = !monster || UObject::GObjects->GetByIndex(monster->Index) != monster || monster->IsActorBeingDestroyed();
+        if (!result.Died) {
+            result.HealthAfter = gone ? 0 : monster->GetCurrentHealth();
+            result.Died = gone || result.HealthAfter <= 0;
+            result.Seconds = Seconds(PhaseStart);
+        }
+        all = all && result.Died;
+    }
+    return all || last;
+}
+
 inline void Sample(QaProbePolicy::Subject& subject, Live& live) {
     auto* monster = live.Actor;
     if (!monster || monster->IsActorBeingDestroyed()) return;
@@ -223,40 +499,9 @@ inline void TickServer(UWorld* world, int port) {
         return;
     }
     if (Current == Phase::Load) {
-        // Blocking loads on the game thread; the report names each object before it loads.
-        PhaseStart = GetTickCount64();
-        auto& stage = Report.Begin("load");
-        for (const auto& asset : Request.Assets) {
-            Report.CurrentAsset = asset;
-            Write();
-            const auto wide = Wide(asset);
-            auto* object = UKismetSystemLibrary::LoadAsset_Blocking(UKismetSystemLibrary::Conv_SoftObjPathToSoftObjRef(
-                UKismetSystemLibrary::MakeSoftObjectPath(FString(wide.c_str()))));
-            // Cooked Blueprint packages keep only their generated class: <package>.<name>_C.
-            bool loaded = object != nullptr;
-            if (!loaded && LoadClass(asset + "_C")) { loaded = true; ++Report.AssetsAsClass; }
-            if (loaded) ++Report.AssetsLoaded; else Report.FailedAssets.push_back(asset);
-        }
-        Report.CurrentAsset.clear();
-        stage.Seconds = Seconds(PhaseStart);
-        if (Report.FailedAssets.empty()) stage.Status = "ok";
-        else Report.Fail(stage, std::to_string(Report.FailedAssets.size()) + " of " + std::to_string(Report.AssetsRequested) + " objects did not load");
-
-        PhaseStart = GetTickCount64();
-        auto& classes = Report.Begin("class");
-        Write();
+        LoadStage(&Loaded);
         std::vector<std::pair<std::string, UClass*>> types;
-        for (const auto& [role, path] : {std::pair<std::string, std::string>{"creature", Request.Creature}, {"control", Request.Control}}) {
-            if (path.empty()) continue;
-            auto* type = LoadClass(path);
-            QaProbePolicy::Subject subject; subject.Role = role; subject.Class = path;
-            Report.Subjects.push_back(subject);
-            types.push_back({role, type});
-            if (!type || !IsBehemoth(type)) Report.Fail(classes, role + " class " + (type ? "is not a behemoth" : "did not load"));
-        }
-        classes.Seconds = Seconds(PhaseStart);
-        if (classes.Status == "running") classes.Status = "ok";
-        if (classes.Status != "ok") { End(); return; }
+        if (!ClassStage(types)) { End(); return; }
 
         // Spawn: a crash or overflow here leaves "spawn" running in the report.
         PhaseStart = GetTickCount64();
@@ -312,6 +557,67 @@ inline void TickServer(UWorld* world, int port) {
             else if (motion == QaProbePolicy::Motion::Frozen || motion == QaProbePolicy::Motion::NoSamples)
                 Report.Fail(stage, std::string("creature motion: ") + QaProbePolicy::Name(motion));
             else if (motion == QaProbePolicy::Motion::Inconclusive) stage.Detail = "creature still; control did not move either (inconclusive)";
+        }
+        // Forced actions: only for a creature that animates (a frozen one has already failed).
+        ActionRows = Report.Verdict == "running" ? ActionTable() : std::vector<ActionRow>{};
+        if (!ActionRows.empty()) {
+            PhaseStart = GetTickCount64();
+            Report.Begin("actions");
+            StopAi(Actors[0].Actor);
+            NextAction = PhaseStart + 1000;  // the stopped behaviour's montage blends out
+            Current = Phase::Actions;
+            Write();
+            return;
+        }
+        if (Report.Verdict == "running") Report.Verdict = "pass";
+        Report.Begin("finish").Status = "ok";
+        End();
+        return;
+    }
+    if (Current == Phase::Actions) {
+        if (!TickActions(world)) return;
+        PhaseStart = GetTickCount64();
+        Report.Begin("parts");
+        Write();
+        BeginParts();
+        StageEnd = GetTickCount64() + 1500;  // breaks replicate and swap materials over a few frames
+        Current = Phase::Parts;
+        Write();
+        return;
+    }
+    if (Current == Phase::Parts) {
+        if (GetTickCount64() < StageEnd) return;
+        EndParts();
+        auto& stage = Report.Stages.back();
+        stage.Seconds = Seconds(PhaseStart);
+        if (const auto problem = QaProbePolicy::JudgeParts(Report.Parts); !problem.empty()) Report.Fail(stage, problem);
+        else {
+            stage.Status = "ok";
+            int creature = 0, broke = 0, control = 0, controlBroke = 0;
+            for (const auto& p : Report.Parts) {
+                if (p.Role == "creature") { ++creature; broke += p.Broke(); }
+                else { ++control; controlBroke += p.Broke(); }
+            }
+            stage.Detail = "creature " + std::to_string(broke) + " of " + std::to_string(creature) + " parts broke; control "
+                + std::to_string(controlBroke) + " of " + std::to_string(control);
+        }
+        PhaseStart = GetTickCount64();
+        Report.Begin("kill");
+        Write();
+        BeginKill();
+        StageEnd = GetTickCount64() + 8000;
+        Current = Phase::Kill;
+        Write();
+        return;
+    }
+    if (Current == Phase::Kill) {
+        if (!PollKill(GetTickCount64() >= StageEnd)) return;
+        auto& stage = Report.Stages.back();
+        stage.Seconds = Seconds(PhaseStart);
+        if (const auto problem = QaProbePolicy::JudgeKill(Report.Kills); !problem.empty()) Report.Fail(stage, problem);
+        else {
+            stage.Status = "ok";
+            for (const auto& k : Report.Kills) stage.Detail += (stage.Detail.empty() ? "" : "; ") + k.Role + (k.Died ? " died" : " survived") + " (" + k.MetadataKey + ")";
         }
         if (Report.Verdict == "running") Report.Verdict = "pass";
         Report.Begin("finish").Status = "ok";

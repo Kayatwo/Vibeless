@@ -1,10 +1,11 @@
-// QA engine probe rules: the request file, the motion verdict and the report (QaProbe.h is the engine
-// side). Portable, so CI tests it on every host. AGPL-3.0-only.
+// QA engine probe rules: the request file, the motion, streaming and portrait verdicts and the report
+// (QaProbe.h is the server side, QaProbeClient.h the client side). Portable, so CI tests it on every
+// host. AGPL-3.0-only.
 //
-// The probe runs only for launcher profiles named qa-*, on a dedicated server the launcher starts for
-// it (`vibeless probe`). The request names the creature class, an optional stock control class and the
-// package objects to load. The report is rewritten before and after every stage, so a crash or stall
-// leaves the stage and asset in progress.
+// The probe runs only for launcher profiles named qa-*, in a dedicated server or a client the launcher
+// starts for it (`vibeless probe [--client]`). The request names the creature class, an optional stock
+// control class and the package objects to load. The report is rewritten before and after every stage,
+// so a crash or stall leaves the stage and asset in progress.
 #pragma once
 #include <algorithm>
 #include <cmath>
@@ -153,6 +154,142 @@ inline Motion Judge(const MotionTrack& creature, const MotionTrack* control) {
     return Motion::Inconclusive;
 }
 
+// ---- Server: forced actions -----------------------------------------------------------------
+inline constexpr int MaxActions = 64;
+inline constexpr double ActionCapSeconds = 15;
+// One row of the creature's action-set table, forced on the live server creature with its AI
+// stopped: the row's montage played to its end. Notifies: Blueprint notifies on the creature's mesh
+// (native notifies such as sounds do not pass through ProcessEvent). Spawned: actors the creature
+// owned or instigated that appeared while it played.
+struct ActionResult {
+    std::string Row, Action, Montage;
+    bool Played = false;
+    double Length = 0, Seconds = 0;
+    int Notifies = 0, Spawned = 0;
+};
+// "" when every row played; otherwise why the actions stage fails.
+inline std::string JudgeActions(const std::vector<ActionResult>& actions) {
+    int failed = 0;
+    std::string first;
+    for (const auto& a : actions) if (!a.Played) { if (!failed++) first = a.Row + (a.Montage.empty() ? " (no montage)" : " (" + a.Montage + ")"); }
+    if (!failed) return {};
+    return std::to_string(failed) + " of " + std::to_string(actions.size()) + " actions did not play, first " + first;
+}
+
+// ---- Server: part breaks and kill -----------------------------------------------------------
+inline constexpr int MaxParts = 64;
+// One monster part of a subject, before and after forced part damage (the part's own HandleDamage).
+// Loot: the part's loot name for each break stage (GetBreakLootName), i.e. the rows it drops.
+// Breakable: its break data has a next stage. CanBeBroken: the native flag at the time (false on
+// stock parts outside a player's attack, so it is recorded, not required).
+struct PartResult {
+    std::string Role, Name;
+    int Stages = 0, Before = 0, After = 0;
+    bool Breakable = false, CanBeBroken = false, Severed = false;
+    double Health = 0, MaxHealth = 0;
+    std::vector<std::string> Loot;
+    bool Broke() const { return After > Before || Severed; }
+};
+// A part break is judged against the stock control under the same forced damage.
+inline std::string JudgeParts(const std::vector<PartResult>& parts) {
+    int creature = 0, control = 0, controlBroke = 0;
+    bool breakable = false, broke = false;
+    for (const auto& p : parts) {
+        if (p.Role == "creature") { ++creature; breakable = breakable || p.Breakable; broke = broke || p.Broke(); }
+        else if (p.Role == "control") { ++control; controlBroke += p.Broke(); }
+    }
+    if (creature == 0 && control > 0) return "the creature has no monster parts (control: " + std::to_string(control) + ")";
+    if (controlBroke > 0 && breakable && !broke) return "no creature part broke under forced damage (control: " + std::to_string(controlBroke) + " broke)";
+    return {};
+}
+// Lethal core damage (10x maximum health through a part's ApplyDamageToCore). MetadataKey: the
+// actor's GetMetadataTableName, the key its loot and metadata rows use (D33).
+// DeathEvents: functions named for death (Death/Died/Dead) that ran on the actor through ProcessEvent.
+struct KillResult {
+    std::string Role, MetadataKey;
+    std::vector<std::string> DeathEvents;
+    bool Died = false;
+    double HealthBefore = 0, HealthAfter = 0, Seconds = 0;
+};
+inline std::string JudgeKill(const std::vector<KillResult>& kills) {
+    bool creature = false, control = false, creatureTried = false;
+    for (const auto& k : kills) {
+        if (k.Role == "creature") { creatureTried = true; creature = creature || k.Died; }
+        else if (k.Role == "control") control = control || k.Died;
+    }
+    if (creatureTried && !creature && control) return "the creature did not die from lethal core damage (the control did)";
+    return {};
+}
+
+// ---- Client: texture streaming --------------------------------------------------------------
+inline constexpr int MaxTextures = 1024;
+inline constexpr double StreamSettleSeconds = 3, StreamTimeoutSeconds = 90;
+
+// Mips of a full chain (down to 1x1) for the larger side, less the combined LOD bias; at least 1.
+inline int FullChainMips(int sizeX, int sizeY, int bias) {
+    int size = (std::max)(sizeX, sizeY), mips = 0;
+    if (size <= 0) return 0;
+    while (size > 0) { ++mips; size >>= 1; }
+    return (std::max)(1, mips - (std::max)(0, bias));
+}
+
+// One package texture forced fully resident. Initial: resident mips before the force (-1 unknown).
+struct TextureState {
+    std::string Path;
+    int SizeX = 0, SizeY = 0, Bias = 0, Initial = -1, Resident = 0;
+    bool Streamable = false, NeverStream = false, Pending = false;
+    int Expected() const { return FullChainMips(SizeX, SizeY, Bias); }
+    // A streamable texture that settled below its full chain. Reported, not failed: a cooked chain
+    // may legitimately stop early, which only live evidence on accepted packages can tell.
+    bool Short() const { return Streamable && !NeverStream && !Pending && Resident < Expected(); }
+};
+struct StreamSummary { int Textures = 0, Streamable = 0, Pending = 0, Short = 0, Raised = 0; };
+inline StreamSummary Summarize(const std::vector<TextureState>& textures) {
+    StreamSummary s;
+    for (const auto& t : textures) {
+        ++s.Textures;
+        s.Streamable += t.Streamable && !t.NeverStream;
+        s.Pending += t.Pending;
+        s.Short += t.Short();
+        s.Raised += t.Initial >= 0 && t.Resident > t.Initial;
+    }
+    return s;
+}
+// Streaming is settled once no update is pending and the resident total held still for
+// StreamSettleSeconds. Observe once per poll with the current totals and time.
+class StreamSettle {
+public:
+    bool Observe(long long residentTotal, int pending, double now) {
+        if (pending > 0 || !started_ || residentTotal != total_) { total_ = residentTotal; since_ = now; started_ = true; return false; }
+        return now - since_ >= StreamSettleSeconds;
+    }
+private:
+    long long total_ = 0;
+    double since_ = 0;
+    bool started_ = false;
+};
+
+// ---- Client: HUD portrait --------------------------------------------------------------------
+// The portrait of a live behemoth. Source "hud": the stock HUD health widget bound it and shows Texture.
+// Source "asset-row": native code's data path (D33), the actor's identity key naming a row of the game
+// instance's BehemothInfo table whose Icon loads as Texture; used when the HUD does not bind (the
+// title screen has no hunt). Bound: a texture was found by either path (or the row exists).
+struct Portrait {
+    bool Bound = false, Revealed = false, Visible = false;
+    std::string Texture, Source;  // Texture: object path; empty: no portrait
+    int Width = 0, Height = 0;
+};
+enum class PortraitResult { Shown, Missing, Inconclusive };
+inline const char* Name(PortraitResult result) {
+    return result == PortraitResult::Shown ? "shown" : result == PortraitResult::Missing ? "missing" : "inconclusive";
+}
+// An empty creature portrait counts as missing only when the stock control showed one in the same client.
+inline PortraitResult Judge(const Portrait& creature, const Portrait* control) {
+    if (creature.Bound && !creature.Texture.empty()) return PortraitResult::Shown;
+    if (control && control->Bound && !control->Texture.empty()) return PortraitResult::Missing;
+    return PortraitResult::Inconclusive;
+}
+
 // ---- Report ---------------------------------------------------------------------------------
 inline std::string Quote(std::string_view text) {
     std::string out = "\"";
@@ -172,11 +309,12 @@ inline std::string Number(double value) {
 
 struct Stage { std::string Name, Status, Detail; double Seconds = 0; };  // Status: running, ok, failed
 struct Subject {
-    std::string Role, Class, AnimClass;
+    std::string Role, Class, AnimClass, Key;  // Key: the actor's native identity key (D33)
     bool Spawned = false;
     double Health = 0, MaxHealth = 0, MovedCm = 0;
     std::vector<std::string> Montages;
     MotionTrack Track;
+    Portrait Hud;  // client only
     void AddMontage(const std::string& montage) {
         if (montage.empty() || Montages.size() >= static_cast<size_t>(MaxMontages)) return;
         for (const auto& m : Montages) if (m == montage) return;
@@ -184,13 +322,18 @@ struct Subject {
     }
 };
 struct Report {
-    std::string Id, Creature, Control, Map, Runtime, Verdict = "running", Reason, CurrentAsset;
+    std::string Id, Side = "server", Creature, Control, Map, Runtime, Verdict = "running", Reason, CurrentAsset;
     int Port = 0;
     unsigned long Pid = 0;
     int AssetsRequested = 0, AssetsLoaded = 0, AssetsAsClass = 0;  // AsClass: Blueprints loaded as <name>_C
     std::vector<std::string> FailedAssets;
     std::vector<Stage> Stages;
     std::vector<Subject> Subjects;
+    std::vector<TextureState> Textures;  // client only
+    std::vector<ActionResult> Actions;   // server only
+    std::vector<PartResult> Parts;       // server only
+    std::vector<KillResult> Kills;       // server only
+    long long Frames = 0;                 // client frames rendered while the subjects were drawn
     bool Finished = false;
 
     Stage& Begin(const std::string& name) { Stages.push_back({name, "running", {}, 0}); return Stages.back(); }
@@ -201,7 +344,8 @@ struct Report {
     }
 
     std::string ToJson() const {
-        std::string out = "{\n  \"schema\": 1,\n  \"id\": " + Quote(Id) + ",\n  \"verdict\": " + Quote(Verdict)
+        const bool client = Side == "client";
+        std::string out = "{\n  \"schema\": 1,\n  \"id\": " + Quote(Id) + ",\n  \"side\": " + Quote(Side) + ",\n  \"verdict\": " + Quote(Verdict)
             + ",\n  \"reason\": " + Quote(Reason) + ",\n  \"finished\": " + (Finished ? "true" : "false")
             + ",\n  \"creature\": " + Quote(Creature) + ",\n  \"control\": " + Quote(Control)
             + ",\n  \"server\": {\"port\": " + std::to_string(Port) + ", \"pid\": " + std::to_string(Pid)
@@ -221,16 +365,76 @@ struct Report {
             const MotionTrack* control = nullptr;
             for (const auto& other : Subjects) if (other.Role == "control") control = &other.Track;
             out += std::string(i ? "," : "") + "\n    {\"role\": " + Quote(s.Role) + ", \"class\": " + Quote(s.Class)
-                + ", \"spawned\": " + (s.Spawned ? "true" : "false") + ", \"animClass\": " + Quote(s.AnimClass)
+                + ", \"spawned\": " + (s.Spawned ? "true" : "false") + ", \"key\": " + Quote(s.Key) + ", \"animClass\": " + Quote(s.AnimClass)
                 + ", \"health\": " + Number(s.Health) + ", \"maxHealth\": " + Number(s.MaxHealth) + ", \"movedCm\": " + Number(s.MovedCm)
                 + ", \"motion\": {\"verdict\": " + Quote(Name(Judge(s.Track, s.Role == "control" ? nullptr : control)))
                 + ", \"samples\": " + std::to_string(s.Track.Samples()) + ", \"bones\": " + std::to_string(s.Track.Bones())
                 + ", \"movingBones\": " + std::to_string(s.Track.MovingBones()) + ", \"maxDeltaCm\": " + Number(s.Track.MaxDeltaCm())
                 + ", \"invalidSamples\": " + std::to_string(s.Track.Invalid()) + "}, \"montages\": [";
             for (size_t m = 0; m < s.Montages.size(); ++m) out += std::string(m ? ", " : "") + Quote(s.Montages[m]);
-            out += "]}";
+            out += "]";
+            if (client) {
+                const Portrait* controlHud = nullptr;
+                for (const auto& other : Subjects) if (other.Role == "control") controlHud = &other.Hud;
+                const auto& p = s.Hud;
+                out += ", \"portrait\": {\"verdict\": " + Quote(Name(Judge(p, s.Role == "control" ? nullptr : controlHud)))
+                    + ", \"bound\": " + (p.Bound ? "true" : "false") + ", \"revealed\": " + (p.Revealed ? "true" : "false")
+                    + ", \"visible\": " + (p.Visible ? "true" : "false") + ", \"source\": " + Quote(p.Source) + ", \"texture\": " + Quote(p.Texture)
+                    + ", \"width\": " + std::to_string(p.Width) + ", \"height\": " + std::to_string(p.Height) + "}";
+            }
+            out += "}";
         }
-        return out + std::string(Subjects.empty() ? "" : "\n  ") + "]\n}\n";
+        out += std::string(Subjects.empty() ? "" : "\n  ") + "]";
+        if (!Actions.empty()) {
+            out += ",\n  \"actions\": [";
+            for (size_t i = 0; i < Actions.size(); ++i) {
+                const auto& a = Actions[i];
+                out += std::string(i ? "," : "") + "\n    {\"row\": " + Quote(a.Row) + ", \"action\": " + Quote(a.Action) + ", \"montage\": " + Quote(a.Montage)
+                    + ", \"played\": " + (a.Played ? "true" : "false") + ", \"length\": " + Number(a.Length) + ", \"seconds\": " + Number(a.Seconds)
+                    + ", \"notifies\": " + std::to_string(a.Notifies) + ", \"spawned\": " + std::to_string(a.Spawned) + "}";
+            }
+            out += "\n  ]";
+        }
+        if (!Parts.empty()) {
+            out += ",\n  \"parts\": [";
+            for (size_t i = 0; i < Parts.size(); ++i) {
+                const auto& p = Parts[i];
+                out += std::string(i ? "," : "") + "\n    {\"role\": " + Quote(p.Role) + ", \"name\": " + Quote(p.Name) + ", \"stages\": " + std::to_string(p.Stages)
+                    + ", \"breakable\": " + (p.Breakable ? "true" : "false") + ", \"canBeBroken\": " + (p.CanBeBroken ? "true" : "false") + ", \"before\": " + std::to_string(p.Before) + ", \"after\": " + std::to_string(p.After)
+                    + ", \"severed\": " + (p.Severed ? "true" : "false") + ", \"broke\": " + (p.Broke() ? "true" : "false")
+                    + ", \"health\": " + Number(p.Health) + ", \"maxHealth\": " + Number(p.MaxHealth) + ", \"loot\": [";
+                for (size_t l = 0; l < p.Loot.size(); ++l) out += std::string(l ? ", " : "") + Quote(p.Loot[l]);
+                out += "]}";
+            }
+            out += "\n  ]";
+        }
+        if (!Kills.empty()) {
+            out += ",\n  \"kills\": [";
+            for (size_t i = 0; i < Kills.size(); ++i) {
+                const auto& k = Kills[i];
+                out += std::string(i ? "," : "") + "\n    {\"role\": " + Quote(k.Role) + ", \"metadataKey\": " + Quote(k.MetadataKey)
+                    + ", \"died\": " + (k.Died ? "true" : "false") + ", \"healthBefore\": " + Number(k.HealthBefore) + ", \"healthAfter\": " + Number(k.HealthAfter)
+                    + ", \"seconds\": " + Number(k.Seconds) + ", \"deathEvents\": [";
+                for (size_t e = 0; e < k.DeathEvents.size(); ++e) out += std::string(e ? ", " : "") + Quote(k.DeathEvents[e]);
+                out += "]}";
+            }
+            out += "\n  ]";
+        }
+        if (client) {
+            const auto s = Summarize(Textures);
+            out += ",\n  \"frames\": " + std::to_string(Frames) + ",\n  \"stream\": {\"textures\": " + std::to_string(s.Textures)
+                + ", \"streamable\": " + std::to_string(s.Streamable) + ", \"raised\": " + std::to_string(s.Raised)
+                + ", \"pending\": " + std::to_string(s.Pending) + ", \"short\": " + std::to_string(s.Short) + ", \"list\": [";
+            for (size_t i = 0; i < Textures.size(); ++i) {
+                const auto& t = Textures[i];
+                out += std::string(i ? "," : "") + "\n    {\"path\": " + Quote(t.Path) + ", \"size\": [" + std::to_string(t.SizeX) + ", " + std::to_string(t.SizeY)
+                    + "], \"bias\": " + std::to_string(t.Bias) + ", \"initial\": " + std::to_string(t.Initial) + ", \"resident\": " + std::to_string(t.Resident)
+                    + ", \"expected\": " + std::to_string(t.Expected()) + ", \"streamable\": " + (t.Streamable && !t.NeverStream ? "true" : "false")
+                    + ", \"pending\": " + (t.Pending ? "true" : "false") + "}";
+            }
+            out += std::string(Textures.empty() ? "" : "\n  ") + "]}";
+        }
+        return out + "\n}\n";
     }
 };
 }

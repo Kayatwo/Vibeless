@@ -93,5 +93,74 @@ int main() {
     assert(json.find("q\\\"uote") != std::string::npos);
     assert(Quote("a\nb") == "\"a\\u000ab\"");
     assert(Number(1.23456) == "1.235");
+    assert(json.find("\"side\": \"server\"") != std::string::npos && json.find("\"stream\"") == std::string::npos);
+    assert(json.find("\"actions\"") == std::string::npos);
+
+    // Server actions: every action-table row must play its montage on the live creature.
+    ActionResult slam{"ShellSlam", "/Game/M/slam.slam_C", "/Game/M/slam_mot.slam_mot", true, 3.2, 3.5, 4, 1};
+    ActionResult bomb{"FrostBomb", "/Game/M/bomb.bomb_C", "/Game/M/bomb_mot.bomb_mot", false, 0, 0, 0, 0};
+    ActionResult none{"Taunt", "/Game/M/taunt.taunt_C", "", false, 0, 0, 0, 0};
+    assert(JudgeActions({slam}).empty() && JudgeActions({}).empty());
+    assert(JudgeActions({slam, bomb, none}) == "2 of 3 actions did not play, first FrostBomb (/Game/M/bomb_mot.bomb_mot)");
+    assert(JudgeActions({none}) == "1 of 1 actions did not play, first Taunt (no montage)");
+    // Parts and kill are judged against the stock control under the same forced damage.
+    PartResult horn{"creature", "Horn", 2, 0, 0, true, false, false, 900, 900, {"Rock_Horn_1", "Rock_Horn_2"}};
+    PartResult hornBroke = horn; hornBroke.After = 1;
+    PartResult stockHorn{"control", "Horn", 2, 0, 1, true, false, false, 0, 900, {}};
+    PartResult stockStill = stockHorn; stockStill.After = 0;
+    PartResult tail{"creature", "Tail", 1, 0, 0, true, false, true, 0, 400, {}};
+    assert(!horn.Broke() && hornBroke.Broke() && tail.Broke());
+    assert(JudgeParts({horn, stockHorn}) == "no creature part broke under forced damage (control: 1 broke)");
+    assert(JudgeParts({hornBroke, stockHorn}).empty() && JudgeParts({horn, tail, stockHorn}).empty());
+    assert(JudgeParts({horn, stockStill}).empty());  // the method did not break stock parts either
+    assert(JudgeParts({stockHorn}) == "the creature has no monster parts (control: 1)");
+    KillResult dead{"creature", "rock_frost", {"OnDeath"}, true, 32000, 0, 1.5}, alive{"creature", "rock_frost", {}, false, 32000, 32000, 8};
+    KillResult stockDead{"control", "rock_normal", {}, true, 32000, 0, 1.2};
+    assert(JudgeKill({dead, stockDead}).empty() && JudgeKill({alive}).empty());
+    assert(JudgeKill({alive, stockDead}) == "the creature did not die from lethal core damage (the control did)");
+    Report acted;
+    acted.Parts = {hornBroke}; acted.Kills = {dead};
+    assert(acted.ToJson().find("\"loot\": [\"Rock_Horn_1\", \"Rock_Horn_2\"]") != std::string::npos);
+    assert(acted.ToJson().find("\"metadataKey\": \"rock_frost\", \"died\": true") != std::string::npos);
+    assert(acted.ToJson().find("\"deathEvents\": [\"OnDeath\"]") != std::string::npos);
+    acted.Actions = {slam};
+    assert(acted.ToJson().find("\"row\": \"ShellSlam\"") != std::string::npos && acted.ToJson().find("\"notifies\": 4, \"spawned\": 1") != std::string::npos);
+
+    // Client streaming: a full chain down to 1x1, less the combined LOD bias, at least one mip.
+    assert(FullChainMips(2048, 2048, 0) == 12 && FullChainMips(2048, 512, 1) == 11);
+    assert(FullChainMips(1, 1, 0) == 1 && FullChainMips(4, 4, 9) == 1 && FullChainMips(0, 0, 0) == 0 && FullChainMips(0, 64, 0) == 7);
+    TextureState full{"/Game/t/a.a", 1024, 1024, 0, 7, 11, true, false, false};
+    TextureState shy{"/Game/t/b.b", 1024, 1024, 0, 7, 9, true, false, false};
+    TextureState stuck{"/Game/t/c.c", 512, 512, 0, 6, 6, true, false, true};
+    TextureState inline_{"/Game/t/d.d", 64, 64, 0, 7, 3, false, false, false};
+    assert(!full.Short() && shy.Short() && !stuck.Short() && !inline_.Short());
+    const auto summary = Summarize({full, shy, stuck, inline_});
+    assert(summary.Textures == 4 && summary.Streamable == 3 && summary.Pending == 1 && summary.Short == 1 && summary.Raised == 2);
+    StreamSettle settle;
+    assert(!settle.Observe(10, 0, 0.0));     // first observation starts the clock
+    assert(!settle.Observe(10, 0, 2.0));
+    assert(!settle.Observe(12, 0, 2.5));     // resident mips changed: restart
+    assert(!settle.Observe(12, 1, 6.0));     // an update is pending: restart
+    assert(!settle.Observe(12, 0, 8.0));
+    assert(settle.Observe(12, 0, 11.0));
+
+    // Client portrait: an empty creature portrait is missing only when the control showed one.
+    Portrait shown{true, true, true, "/Game/UI/x.x", "hud", 512, 512}, blank{true, true, false, "", "", 0, 0}, unbound{};
+    assert(Judge(shown, nullptr) == PortraitResult::Shown);
+    assert(Judge(blank, &shown) == PortraitResult::Missing);
+    assert(Judge(blank, &blank) == PortraitResult::Inconclusive && Judge(blank, nullptr) == PortraitResult::Inconclusive);
+    assert(Judge(unbound, &shown) == PortraitResult::Missing);
+    Report client;
+    client.Side = "client"; client.Frames = 120;
+    Subject seen; seen.Role = "creature"; seen.Hud = blank; seen.Key = "rock_frost";
+    Subject stock; stock.Role = "control"; stock.Hud = shown;
+    client.Subjects = {seen, stock};
+    client.Textures = {full, shy};
+    const auto clientJson = client.ToJson();
+    assert(clientJson.find("\"side\": \"client\"") != std::string::npos && clientJson.find("\"frames\": 120") != std::string::npos);
+    assert(clientJson.find("\"portrait\": {\"verdict\": \"missing\"") != std::string::npos);
+    assert(clientJson.find("\"portrait\": {\"verdict\": \"shown\"") != std::string::npos);
+    assert(clientJson.find("\"key\": \"rock_frost\"") != std::string::npos && clientJson.find("\"source\": \"hud\"") != std::string::npos);
+    assert(clientJson.find("\"short\": 1") != std::string::npos && clientJson.find("\"expected\": 11") != std::string::npos);
     return 0;
 }

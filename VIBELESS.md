@@ -126,7 +126,7 @@ behaviour.
 | `INVENTORY_REFUSE_OVERSPEND` | metagame | `0` restores upstream clamping | refuse |
 | `DR_FEATURES` | client, game servers (same value) | `none`, or native feature IDs (`hunt-services`, `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes`, `qa-probe`), comma or space separated; required features are added | every feature except `reward-probes` and `qa-probe` |
 | `DR_COMPATIBILITY_CHECK` | client | `off` keeps the game open on a mismatch (troubleshooting; the server still refuses matchmaking) | on |
-| `DR_QA_PROBE` | one game server started by `vibeless probe` | request file in `<profile>/data/qa-probe/` of a `qa-*` profile; read only when `qa-probe` is in `DR_FEATURES` (`QaProbe.h`) | unset |
+| `DR_QA_PROBE` | one game server or client started by `vibeless probe` | request file in `<profile>/data/qa-probe/` of a `qa-*` profile; read only when `qa-probe` is in `DR_FEATURES` (`QaProbe.h` server, `QaProbeClient.h` client) | unset |
 | `DR_TABLES_DIR` | deploy, metagame | folder of composed tables (`deploy/player_hunts_table.json`, `deploy/matchmaker_hunts_table.json`, `deploy/hunt_rules.json`, `metagame/hunt_titles.json`); all must be present | bundled 1.4.4 tables |
 
 Packages name the native features they need as capabilities (`native-feature:deepfrost`); the

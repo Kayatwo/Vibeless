@@ -7,8 +7,8 @@
 //   thunderdeep     Thunderdeep Drask pursuit and portrait
 //   test-arena      Test Arena destination controls (F8 panel, allowlisted spawn/despawn)
 //   reward-probes   read-only reward diagnostics (server only, off unless listed; D10)
-//   qa-probe        engine probe of a creature package (server only, internal, off unless listed;
-//                   acts only for a qa-* profile with a DR_QA_PROBE request; QaProbe.h)
+//   qa-probe        engine probe of a creature package (internal, off unless listed; acts only for
+//                   a qa-* profile with a DR_QA_PROBE request; QaProbe.h server, QaProbeClient.h client)
 // A core-only build (VIBELESS_FEATURES=0) registers none of them.
 #pragma once
 #include <cstdlib>
@@ -176,10 +176,12 @@ inline void RegisterFeatures(uintptr_t base) {
     Feature probe;
     probe.Id = "qa-probe";
     probe.Version = "1.0.0";
-    probe.Sides = Side::Server;
+    probe.Sides = Side::Both;
     probe.DefaultEnabled = false;
-    probe.Internal = true;  // `vibeless probe` lists it for one server; packages never ask for it
+    probe.Internal = true;  // `vibeless probe` lists it for one server or client; packages never ask for it
     probe.ServerTick = [world](const Tick& t) { QaProbe::TickServer(world(t), t.Port); };
+    probe.ServerAfter = [object, function](const Event& e) { QaProbe::ObserveServerEvent(object(e), function(e), e.Parms); };
+    probe.ClientTickAfter = [world](const Tick& t) { QaProbe::TickClient(world(t)); };
     add(std::move(probe));
 }
 }
