@@ -124,8 +124,9 @@ behaviour.
 | `DR_AUTO_PRESS_START` | client | on/off | on |
 | `DR_DUALSENSE` | client | on/off | on |
 | `INVENTORY_REFUSE_OVERSPEND` | metagame | `0` restores upstream clamping | refuse |
-| `DR_FEATURES` | client, game servers (same value) | `none`, or native feature IDs (`hunt-services`, `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes`), comma or space separated; required features are added | every feature except `reward-probes` |
+| `DR_FEATURES` | client, game servers (same value) | `none`, or native feature IDs (`hunt-services`, `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes`, `qa-probe`), comma or space separated; required features are added | every feature except `reward-probes` and `qa-probe` |
 | `DR_COMPATIBILITY_CHECK` | client | `off` keeps the game open on a mismatch (troubleshooting; the server still refuses matchmaking) | on |
+| `DR_QA_PROBE` | one game server started by `vibeless probe` | request file in `<profile>/data/qa-probe/` of a `qa-*` profile; read only when `qa-probe` is in `DR_FEATURES` (`QaProbe.h`) | unset |
 | `DR_TABLES_DIR` | deploy, metagame | folder of composed tables (`deploy/player_hunts_table.json`, `deploy/matchmaker_hunts_table.json`, `deploy/hunt_rules.json`, `metagame/hunt_titles.json`); all must be present | bundled 1.4.4 tables |
 
 Packages name the native features they need as capabilities (`native-feature:deepfrost`); the
@@ -145,7 +146,7 @@ The interfaces packages and a launcher rely on. Each has a version; the bundle p
 | Contract | Version | Where | Change rule |
 | --- | --- | --- | --- |
 | Feature host API (lifecycle events, hook ownership, `DR_FEATURES`, startup report) | 1 | `FeatureHost.h`, `VibelessFeatures.h` | New events or report fields keep the version; removing or changing one raises it. |
-| Native feature IDs | `hunt-services` (internal), `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes` | `VibelessFeatures.h` | An ID is never reused for different behaviour. Packages name them as `native-feature:<id>`. |
+| Native feature IDs | `hunt-services` (internal), `deepfrost`, `thunderdeep`, `test-arena`, `reward-probes`, `qa-probe` (internal) | `VibelessFeatures.h` | An ID is never reused for different behaviour. Packages name them as `native-feature:<id>`. |
 | Content registry (`native/registry.txt`) | `vibeless-registry 1` | `ContentRegistry.h` | New optional fields keep the version; unknown fields are refused, so adding one is a foundation minor release. |
 | Composed tables (`DR_TABLES_DIR`) | `deploy/*`, `metagame/hunt_titles.json`, `native/registry.txt`, `composition.json` | `hunttables.ts`, `serverstatus.ts`, `compatibility.ts` | All files must be present; a missing or invalid one stops the service. |
 | Compatibility contract | `vibeless-requirements 1` / `vibeless-client 1` | `Compatibility.h`, metagame `compatibility.ts` | Client and server must agree on the version; the foundation's major.minor must match. |
