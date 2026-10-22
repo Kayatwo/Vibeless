@@ -340,6 +340,16 @@ struct Subject {
         Montages.push_back(montage);
     }
 };
+// Diagnostic observations never satisfy an action verdict. Missing events are inconclusive:
+// Blueprint/native calls can bypass the ProcessEvent observer.
+struct ActionTrace {
+    std::string Role, Point, Function, ObjectClass, Row, Action, BehaviorTree, Subtree, Controller, Brain, Error;
+    std::optional<double> BaseValue;
+    std::optional<bool> Available;
+    std::optional<int> OverrideCount;
+    std::vector<std::string> Overrides;
+};
+inline constexpr size_t MaxActionTrace = 256;
 struct Report {
     std::string Id, Side = "server", Creature, Control, Map, Runtime, Verdict = "running", Reason, CurrentAsset;
     int Port = 0;
@@ -350,10 +360,17 @@ struct Report {
     std::vector<Subject> Subjects;
     std::vector<TextureState> Textures;  // client only
     std::vector<ActionResult> Actions;   // server only
+    std::vector<ActionTrace> ActionTraces;
+    size_t ActionTracesDropped = 0;
     std::vector<PartResult> Parts;       // server only
     std::vector<KillResult> Kills;       // server only
     long long Frames = 0;                 // client frames rendered while the subjects were drawn
     bool Finished = false;
+
+    void Trace(ActionTrace trace) {
+        if (ActionTraces.size() < MaxActionTrace) ActionTraces.push_back(std::move(trace));
+        else ++ActionTracesDropped;
+    }
 
     Stage& Begin(const std::string& name) { Stages.push_back({name, "running", {}, 0}); return Stages.back(); }
     // The first failing stage decides the verdict; later stages still run when they can.
@@ -416,6 +433,25 @@ struct Report {
                     + ", \"observed\": " + (a.Observed ? "true" : "false") + ", \"completed\": " + (a.Completed ? "true" : "false") + "}";
             }
             out += "\n  ]";
+        }
+        if (!ActionTraces.empty()) {
+            out += ",\n  \"actionTrace\": {\"observer\": \"ProcessEvent plus explicit state queries\", \"missingEventsInconclusive\": true, \"dropped\": "
+                + std::to_string(ActionTracesDropped) + ", \"entries\": [";
+            for (size_t i = 0; i < ActionTraces.size(); ++i) {
+                const auto& t = ActionTraces[i];
+                out += std::string(i ? "," : "") + "\n    {\"role\": " + Quote(t.Role) + ", \"point\": " + Quote(t.Point)
+                    + ", \"function\": " + Quote(t.Function) + ", \"objectClass\": " + Quote(t.ObjectClass)
+                    + ", \"row\": " + Quote(t.Row) + ", \"action\": " + Quote(t.Action)
+                    + ", \"baseValue\": " + (t.BaseValue ? Number(*t.BaseValue) : "null")
+                    + ", \"available\": " + (t.Available ? (*t.Available ? "true" : "false") : "null")
+                    + ", \"behaviorTree\": " + Quote(t.BehaviorTree) + ", \"loadedSubtree\": " + Quote(t.Subtree)
+                    + ", \"controller\": " + Quote(t.Controller) + ", \"brain\": " + Quote(t.Brain)
+                    + ", \"overrideCount\": " + (t.OverrideCount ? std::to_string(*t.OverrideCount) : "null")
+                    + ", \"error\": " + Quote(t.Error) + ", \"overrides\": [";
+                for (size_t j = 0; j < t.Overrides.size(); ++j) out += std::string(j ? ", " : "") + Quote(t.Overrides[j]);
+                out += "]}";
+            }
+            out += "\n  ]}";
         }
         if (!Parts.empty()) {
             out += ",\n  \"parts\": [";

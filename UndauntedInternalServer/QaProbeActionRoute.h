@@ -4,6 +4,7 @@
 // AGPL-3.0-only.
 #pragma once
 #include "FeatureSupport.h"
+#include <optional>
 #include "SDK/BP_BehemothAction_classes.hpp"
 
 namespace QaProbeActionRoute {
@@ -61,7 +62,7 @@ inline void Finish(Live& live) {
     }
     live.Prepared = false;
 }
-inline Live Begin(AArchonBehemoth* monster, UClass* actionClass) {
+inline Live Find(AArchonBehemoth* monster, UClass* actionClass) {
     Live live;
     Call actions(monster, "GetActionArray", {{"ActionArray", "ArrayProperty", sizeof(TArray<AActor*>), 0}});
     if (!actions.Function) { live.Error = "GetActionArray signature unavailable"; return live; }
@@ -79,7 +80,21 @@ inline Live Begin(AArchonBehemoth* monster, UClass* actionClass) {
     // returns that buffer to the engine, just as a generated parameter object's destructor does.
     array.Free();
     if (!live.Error.empty()) return live;
-    if (!live.Action) { live.Error = "no matching live action owned by subject"; return live; }
+    if (!live.Action) live.Error = "no matching live action owned by subject";
+    return live;
+}
+inline std::optional<bool> Available(ABP_BehemothAction_C* action) {
+    Call available(action, "IsActionAvailable", {{"IsActionAvailable", "BoolProperty", 1, 0}});
+    if (!available.Function) return std::nullopt;
+    available.Run(action);
+    return available.At<bool>();
+}
+inline Live Begin(AArchonBehemoth* monster, UClass* actionClass) {
+    Live live = Find(monster, actionClass);
+    if (!live.Error.empty()) return live;
+    const auto available = Available(live.Action);
+    if (!available.has_value()) { live.Error = "IsActionAvailable signature unavailable"; return live; }
+    if (!*available) { live.Error = "live action unavailable; availability is not bypassed"; return live; }
     Call pre(live.Action, "PreAttackLogic", {}), post(live.Action, "PostAttackLogic", {});
     Call choose(live.Action, "ChooseMontageToPlay", {{"Montage", "ObjectProperty", sizeof(UAnimMontage*), 0}});
     Call play(monster, "PlayBehemothMontage", {

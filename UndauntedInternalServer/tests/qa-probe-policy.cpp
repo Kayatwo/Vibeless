@@ -153,6 +153,25 @@ int main() {
     assert(acted.ToJson().find("\"role\": \"control\"") != std::string::npos);
     assert(acted.ToJson().find("\"observed\": true, \"completed\": true") != std::string::npos);
 
+    // Diagnostic state must distinguish unavailable from unknown, stay bounded and never waive
+    // a failed action (including the stock-negative case).
+    ActionTrace trace;
+    trace.Role = "control"; trace.Point = "before-stop-ai"; trace.Row = "barrelchg";
+    trace.BaseValue = 0; trace.Available = false; trace.OverrideCount = 0;
+    acted.Trace(trace);
+    auto traced = acted.ToJson();
+    assert(traced.find("\"baseValue\": 0.000, \"available\": false") != std::string::npos);
+    assert(traced.find("\"overrideCount\": 0") != std::string::npos);
+    assert(traced.find("\"missingEventsInconclusive\": true") != std::string::npos);
+    trace.BaseValue.reset(); trace.Available.reset(); trace.OverrideCount.reset();
+    trace.Error = "signature unavailable";
+    acted.Trace(trace);
+    assert(acted.ToJson().find("\"baseValue\": null, \"available\": null") != std::string::npos);
+    for (size_t i = acted.ActionTraces.size(); i < MaxActionTrace + 3; ++i) acted.Trace(trace);
+    assert(acted.ActionTraces.size() == MaxActionTrace && acted.ActionTracesDropped == 3);
+    acted.Actions = {none};
+    assert(!JudgeActions(acted.Actions).empty());
+
     // Client streaming: a full chain down to 1x1, less the combined LOD bias, at least one mip.
     assert(FullChainMips(2048, 2048, 0) == 12 && FullChainMips(2048, 512, 1) == 11);
     assert(FullChainMips(1, 1, 0) == 1 && FullChainMips(4, 4, 9) == 1 && FullChainMips(0, 0, 0) == 0 && FullChainMips(0, 64, 0) == 7);

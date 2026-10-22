@@ -9,6 +9,7 @@
 #pragma once
 #include "QaProbePolicy.h"
 #include "QaProbeActionRoute.h"
+#include "QaProbeActionTrace.h"
 #include "FeatureSupport.h"
 #include "HuntWorld.h"
 #include "VibelessVersion.h"
@@ -259,6 +260,7 @@ inline std::vector<LiveKill> LiveKills;
 // plays (native notifies such as sounds do not pass through ProcessEvent), and functions named for
 // death that run on each subject during the kill stage.
 inline void ObserveServerEvent(UObject* object, UFunction* function, void* parameters) {
+    QaProbeActionTrace::Observe(Report, object, function, true);
     if (!object || !function || Actors.empty()) return;
     if (Current == Phase::Kill) {
         for (const auto& live : LiveKills) {
@@ -323,7 +325,11 @@ inline bool TickActions(UWorld* world) {
         ActionNotifies = 0; ActionSpawned = 0;
         float length = 0;
         if (anim && row.Montage) length = anim->Montage_Play(row.Montage, row.Rate, EMontagePlayReturnType::MontageLength, 0.f, true);
-        else if (!row.Montage) { DynamicAction = QaProbeActionRoute::Begin(monster, row.Action); length = DynamicAction.Length; }
+        else if (!row.Montage) {
+            QaProbeActionTrace::Snapshot(Report, monster, result.Role, "before-forced-action", row.Action, row.Row);
+            Write();
+            DynamicAction = QaProbeActionRoute::Begin(monster, row.Action); length = DynamicAction.Length;
+        }
         auto& played = Report.Actions.back();
         played.Played = length > 0; played.Length = length;
         if (!row.Montage) {
@@ -545,8 +551,13 @@ inline void TickServer(UWorld* world, int port) {
             Search seen;
             if (!SpawnPoint(world, first, location, seen)) { Report.Fail(spawn, "no navigable spawn point for the " + types[i].first + " (" + Describe(seen) + ")"); break; }
             std::string error;
+            QaProbeActionTrace::SpawningClass = types[i].second;
+            QaProbeActionTrace::SpawningRole = Report.Subjects[i].Role;
             auto* monster = Spawn(world, types[i].second, location, error);
+            QaProbeActionTrace::SpawningClass = nullptr;
             if (!monster) { Report.Fail(spawn, types[i].first + ": " + error); break; }
+            QaProbeActionTrace::Register(monster, Report.Subjects[i].Role);
+            QaProbeActionTrace::Snapshot(Report, monster, Report.Subjects[i].Role, "spawn-return");
             Actors[i].Actor = monster;
             Actors[i].Origin = monster->K2_GetActorLocation();
             if (!first) first = &Actors[i].Origin;
@@ -592,6 +603,9 @@ inline void TickServer(UWorld* world, int port) {
         // Forced actions: only for a creature that animates (a frozen one has already failed).
         ActionRows = Report.Verdict == "running" ? ActionTable() : std::vector<ActionRow>{};
         if (!ActionRows.empty()) {
+            for (const auto& row : ActionRows) if (!row.Montage)
+                QaProbeActionTrace::Snapshot(Report, Actors[row.Subject].Actor, Report.Subjects[row.Subject].Role,
+                    "before-stop-ai", row.Action, row.Row);
             PhaseStart = GetTickCount64();
             Report.Begin("actions");
             for (const auto& actor : Actors) StopAi(actor.Actor);

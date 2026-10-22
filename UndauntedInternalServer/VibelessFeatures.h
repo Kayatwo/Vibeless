@@ -180,6 +180,7 @@ inline void RegisterFeatures(uintptr_t base) {
     probe.DefaultEnabled = false;
     probe.Internal = true;  // `vibeless probe` lists it for one server or client; packages never ask for it
     probe.ServerTick = [world](const Tick& t) { QaProbe::TickServer(world(t), t.Port); };
+    probe.ServerBeforeOriginal = [object, function](const Event& e) { QaProbeActionTrace::Observe(QaProbe::Report, object(e), function(e), false); };
     probe.ServerAfter = [object, function](const Event& e) { QaProbe::ObserveServerEvent(object(e), function(e), e.Parms); };
     probe.ClientTickAfter = [world](const Tick& t) { QaProbe::TickClient(world(t)); };
     add(std::move(probe));
