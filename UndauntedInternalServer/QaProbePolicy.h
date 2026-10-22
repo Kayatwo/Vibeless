@@ -166,9 +166,28 @@ struct ActionResult {
     bool Played = false;
     double Length = 0, Seconds = 0;
     int Notifies = 0, Spawned = 0;
+    std::string Role = "creature", Route = "table-montage", SelectedMontage = {}, Error = {};
+    bool Observed = false, Completed = false;
 };
 // "" when every row played; otherwise why the actions stage fails.
 inline std::string JudgeActions(const std::vector<ActionResult>& actions) {
+    // A no-table-montage row needs real execution on both the creature and its stock control.
+    // Both missing/idle is a coverage failure, never a passing comparison.
+    for (const auto& a : actions) if (a.Route == "action-class") {
+        if ((a.Role != "creature" && a.Role != "control") || a.Row.empty() || a.Action.empty())
+            return "invalid action-class subject identity";
+        if (!a.Error.empty()) return a.Row + " (" + a.Role + "): " + a.Error;
+        if (!a.Played || !a.Observed || !a.Completed || a.SelectedMontage.empty())
+            return a.Row + " (" + a.Role + "): action-class execution incomplete";
+        {
+            int peers = 0, sameRole = 0;
+            for (const auto& b : actions)
+                if (b.Route == a.Route && b.Row == a.Row && b.Action == a.Action) {
+                    if (b.Role == a.Role) ++sameRole; else ++peers;
+                }
+            if (peers != 1 || sameRole != 1) return a.Row + ": exactly one creature and stock action-class control are required";
+        }
+    }
     int failed = 0;
     std::string first;
     for (const auto& a : actions) if (!a.Played) { if (!failed++) first = a.Row + (a.Montage.empty() ? " (no montage)" : " (" + a.Montage + ")"); }
@@ -391,7 +410,10 @@ struct Report {
                 const auto& a = Actions[i];
                 out += std::string(i ? "," : "") + "\n    {\"row\": " + Quote(a.Row) + ", \"action\": " + Quote(a.Action) + ", \"montage\": " + Quote(a.Montage)
                     + ", \"played\": " + (a.Played ? "true" : "false") + ", \"length\": " + Number(a.Length) + ", \"seconds\": " + Number(a.Seconds)
-                    + ", \"notifies\": " + std::to_string(a.Notifies) + ", \"spawned\": " + std::to_string(a.Spawned) + "}";
+                    + ", \"notifies\": " + std::to_string(a.Notifies) + ", \"spawned\": " + std::to_string(a.Spawned)
+                    + ", \"role\": " + Quote(a.Role) + ", \"route\": " + Quote(a.Route)
+                    + ", \"selectedMontage\": " + Quote(a.SelectedMontage) + ", \"error\": " + Quote(a.Error)
+                    + ", \"observed\": " + (a.Observed ? "true" : "false") + ", \"completed\": " + (a.Completed ? "true" : "false") + "}";
             }
             out += "\n  ]";
         }

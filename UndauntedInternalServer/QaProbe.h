@@ -8,6 +8,7 @@
 // AGPL-3.0-only.
 #pragma once
 #include "QaProbePolicy.h"
+#include "QaProbeActionRoute.h"
 #include "FeatureSupport.h"
 #include "HuntWorld.h"
 #include "VibelessVersion.h"
@@ -211,12 +212,13 @@ inline bool ClassStage(std::vector<std::pair<std::string, UClass*>>& types) {
 
 // ---- Forced actions -------------------------------------------------------------------------
 // One row of a package action-set table (row struct Struct_ActionSet): the attack class and its montage.
-struct ActionRow { std::string Row; UClass* Action = nullptr; UAnimMontage* Montage = nullptr; float Rate = 1; };
+struct ActionRow { std::string Row; UClass* Action = nullptr; UAnimMontage* Montage = nullptr; float Rate = 1; size_t Subject = 0; };
 inline std::vector<ActionRow> ActionRows;
 inline size_t ActionIndex = 0;
 inline ULONGLONG ActionStart = 0, ActionEnd = 0, NextAction = 0;
 inline std::set<AActor*> ActionActors;  // owned or instigated by the creature before/while the action plays
 inline int ActionNotifies = 0, ActionSpawned = 0;
+inline QaProbeActionRoute::Live DynamicAction;
 
 inline std::vector<ActionRow> ActionTable() {
     std::vector<ActionRow> rows;
@@ -233,6 +235,13 @@ inline std::vector<ActionRow> ActionTable() {
                 row->Montage_5_69C9740F43CE4938ABF4AEBB9EDD1279, rate > 0 && rate < 10 ? rate : 1.f});
         }
     }
+    // A dynamic row also runs against the real stock-owned action instance. Do not copy the
+    // candidate's action data into the control or create a fallback action/montage.
+    const auto candidateRows = rows;
+    for (const auto& row : candidateRows) if (!row.Montage)
+        for (size_t i = 0; i < Actors.size(); ++i) if (Report.Subjects[i].Role == "control") {
+            auto control = row; control.Subject = i; rows.push_back(control);
+        }
     return rows;
 }
 // Actors the creature owns or instigated that are not yet in ActionActors; adds them.
@@ -261,8 +270,9 @@ inline void ObserveServerEvent(UObject* object, UFunction* function, void* param
         }
         return;
     }
-    if (Current != Phase::Actions || ActionEnd == 0 || !parameters || !Actors[0].Actor) return;
-    auto* mesh = Actors[0].Actor->Mesh;
+    if (Current != Phase::Actions || ActionEnd == 0 || !parameters || ActionIndex >= ActionRows.size()) return;
+    auto* actor = Actors[ActionRows[ActionIndex].Subject].Actor;
+    auto* mesh = actor ? actor->Mesh : nullptr;
     if (!mesh) return;
     const auto name = function->GetName();
     if (name == "Received_Notify" || name == "Received_NotifyBegin") { if (*static_cast<USkeletalMeshComponent**>(parameters) == mesh) ++ActionNotifies; }
@@ -283,7 +293,8 @@ inline void StopAi(AArchonBehemoth* monster) {
 // One poll of the actions stage; true when it has finished.
 inline bool TickActions(UWorld* world) {
     const auto now = GetTickCount64();
-    auto* monster = Actors.empty() ? nullptr : Actors[0].Actor;
+    const size_t subject = ActionIndex < ActionRows.size() ? ActionRows[ActionIndex].Subject : 0;
+    auto* monster = Actors.empty() ? nullptr : Actors[subject].Actor;
     auto& stage = Report.Stages.back();
     if (!monster || monster->IsActorBeingDestroyed()) { Report.Fail(stage, "the creature was destroyed during the actions"); return true; }
     auto* anim = monster->Mesh ? monster->Mesh->GetAnimInstance() : nullptr;
@@ -303,6 +314,8 @@ inline bool TickActions(UWorld* world) {
         const auto& row = ActionRows[ActionIndex];
         QaProbePolicy::ActionResult result;
         result.Row = row.Row; result.Action = FeatureSupport::ObjectPath(row.Action); result.Montage = FeatureSupport::ObjectPath(row.Montage);
+        result.Role = Report.Subjects[subject].Role;
+        if (!row.Montage) result.Route = "action-class";
         Report.CurrentAsset = result.Montage.empty() ? result.Action : result.Montage;
         Report.Actions.push_back(result);
         Write();  // a crash while it plays leaves the montage in the report
@@ -310,8 +323,15 @@ inline bool TickActions(UWorld* world) {
         ActionNotifies = 0; ActionSpawned = 0;
         float length = 0;
         if (anim && row.Montage) length = anim->Montage_Play(row.Montage, row.Rate, EMontagePlayReturnType::MontageLength, 0.f, true);
+        else if (!row.Montage) { DynamicAction = QaProbeActionRoute::Begin(monster, row.Action); length = DynamicAction.Length; }
         auto& played = Report.Actions.back();
         played.Played = length > 0; played.Length = length;
+        if (!row.Montage) {
+            played.SelectedMontage = FeatureSupport::ObjectPath(DynamicAction.Montage);
+            played.Error = DynamicAction.Error;
+            played.Observed = anim && DynamicAction.Montage && anim->Montage_IsPlaying(DynamicAction.Montage);
+            Write();
+        }
         ActionStart = now;
         const double cap = (std::min)(QaProbePolicy::ActionCapSeconds, length / row.Rate + 1.0);
         ActionEnd = now + static_cast<ULONGLONG>((std::max)(0.25, cap) * 1000);
@@ -319,6 +339,17 @@ inline bool TickActions(UWorld* world) {
     }
     ActionSpawned += NewOwnedActors(world, monster);
     const auto& row = ActionRows[ActionIndex];
+    if (!row.Montage) {
+        auto& result = Report.Actions.back();
+        const bool playing = anim && DynamicAction.Montage && anim->Montage_IsPlaying(DynamicAction.Montage);
+        result.Observed = result.Observed || playing;
+        if (playing && now < ActionEnd) return false;
+        result.Completed = result.Observed && !playing && now < ActionEnd;
+        if (playing || (result.Observed && now >= ActionEnd)) result.Error = "action exceeded the bounded completion window";
+        if (playing) anim->Montage_Stop(0.25f, DynamicAction.Montage);
+        QaProbeActionRoute::Finish(DynamicAction);
+        if (!DynamicAction.Error.empty()) result.Error = DynamicAction.Error;
+    }
     if (now < ActionEnd && anim && row.Montage && anim->Montage_IsPlaying(row.Montage)) return false;
     auto& done = Report.Actions.back();
     done.Seconds = Seconds(ActionStart); done.Notifies = ActionNotifies; done.Spawned = ActionSpawned;
@@ -563,7 +594,7 @@ inline void TickServer(UWorld* world, int port) {
         if (!ActionRows.empty()) {
             PhaseStart = GetTickCount64();
             Report.Begin("actions");
-            StopAi(Actors[0].Actor);
+            for (const auto& actor : Actors) StopAi(actor.Actor);
             NextAction = PhaseStart + 1000;  // the stopped behaviour's montage blends out
             Current = Phase::Actions;
             Write();

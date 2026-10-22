@@ -103,6 +103,29 @@ int main() {
     assert(JudgeActions({slam}).empty() && JudgeActions({}).empty());
     assert(JudgeActions({slam, bomb, none}) == "2 of 3 actions did not play, first FrostBomb (/Game/M/bomb_mot.bomb_mot)");
     assert(JudgeActions({none}) == "1 of 1 actions did not play, first Taunt (no montage)");
+    // No table montage: both live action-class routes must really start, be observed, and finish.
+    // Fixtures model the positive protocol; they do not assert a stock barrel-charge runtime pass.
+    ActionResult dynamic = none;
+    dynamic.Route = "action-class"; dynamic.Played = dynamic.Observed = dynamic.Completed = true;
+    dynamic.SelectedMontage = "/Game/M/dynamic.dynamic";
+    ActionResult stockDynamic = dynamic; stockDynamic.Role = "control";
+    assert(JudgeActions({dynamic, stockDynamic}).empty());
+    assert(!JudgeActions({dynamic}).empty() && !JudgeActions({stockDynamic}).empty());
+    assert(!JudgeActions({dynamic, stockDynamic, stockDynamic}).empty());
+    for (int failure = 0; failure < 5; ++failure) {
+        auto bad = dynamic;
+        if (failure == 0) bad.Played = false;
+        if (failure == 1) bad.Observed = false;
+        if (failure == 2) bad.Completed = false;
+        if (failure == 3) bad.SelectedMontage.clear();
+        if (failure == 4) bad.Error = "compound behavior-tree route unresolved";
+        assert(!JudgeActions({bad, stockDynamic}).empty());
+        auto badControl = bad; badControl.Role = "control";
+        assert(!JudgeActions({dynamic, badControl}).empty());
+        assert(!JudgeActions({bad, badControl}).empty());
+    }
+    auto wrongControl = stockDynamic; wrongControl.Action += "_different";
+    assert(!JudgeActions({dynamic, wrongControl}).empty());
     // Parts and kill are judged against the stock control under the same forced damage.
     PartResult horn{"creature", "Horn", 2, 0, 0, true, false, false, 900, 900, {"Rock_Horn_1", "Rock_Horn_2"}};
     PartResult hornBroke = horn; hornBroke.After = 1;
@@ -125,6 +148,10 @@ int main() {
     assert(acted.ToJson().find("\"deathEvents\": [\"OnDeath\"]") != std::string::npos);
     acted.Actions = {slam};
     assert(acted.ToJson().find("\"row\": \"ShellSlam\"") != std::string::npos && acted.ToJson().find("\"notifies\": 4, \"spawned\": 1") != std::string::npos);
+    acted.Actions = {dynamic, stockDynamic};
+    assert(acted.ToJson().find("\"route\": \"action-class\"") != std::string::npos);
+    assert(acted.ToJson().find("\"role\": \"control\"") != std::string::npos);
+    assert(acted.ToJson().find("\"observed\": true, \"completed\": true") != std::string::npos);
 
     // Client streaming: a full chain down to 1x1, less the combined LOD bias, at least one mip.
     assert(FullChainMips(2048, 2048, 0) == 12 && FullChainMips(2048, 512, 1) == 11);
