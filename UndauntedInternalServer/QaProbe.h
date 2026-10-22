@@ -25,7 +25,7 @@
 
 namespace QaProbe {
 using namespace SDK;
-enum class Phase { Start, World, Load, Spawn, Sample, Actions, Parts, Kill, Finish, Idle };
+enum class Phase { Start, World, Load, Spawn, Sample, Actions, ActionHealth, Parts, Kill, Finish, Idle };
 inline Phase Current = Phase::Start;
 inline QaProbePolicy::Request Request;
 inline QaProbePolicy::Report Report;
@@ -381,6 +381,61 @@ inline std::vector<Umonsterpart_bpc_C*> PartsOf(AArchonBehemoth* monster) {
     for (auto* component : components) if (component) parts.push_back(static_cast<Umonsterpart_bpc_C*>(component));
     return parts;
 }
+// After the original action verdict, diagnose no-montage rows across stock core-damage calls.
+// Restart only each subject's own brain, observe for six seconds per step, then stop it for the
+// existing parts/kill stages. This does not force rage/aether, rewrite action values or clear failures.
+inline int ActionHealthStep = 0;
+inline ULONGLONG NextHealthSample = 0;
+inline void TraceActionHealth(const std::string& point, bool damage) {
+    std::set<size_t> damaged;
+    for (const auto& row : ActionRows) if (!row.Montage) {
+        auto* actor = Actors[row.Subject].Actor;
+        if (!actor || actor->IsActorBeingDestroyed()) {
+            QaProbePolicy::ActionTrace t; t.Role = Report.Subjects[row.Subject].Role;
+            t.Point = point; t.Row = row.Row; t.Error = "subject destroyed during health trace";
+            Report.Trace(std::move(t)); continue;
+        }
+        std::optional<double> requested;
+        std::string error;
+        if (damage && damaged.insert(row.Subject).second) {
+            requested = QaProbePolicy::ActionTraceDamage(actor->GetCurrentHealth(), actor->GetMaxHealth(), ActionHealthStep);
+            const auto parts = PartsOf(actor);
+            if (!requested) error = "invalid health for diagnostic damage";
+            else if (parts.empty()) error = "no stock part for diagnostic core damage";
+            else if (*requested > 0) {
+                QaProbeActionRoute::Call hit(parts[0], "ApplyDamageToCore", {
+                    {"BaseDamage", "FloatProperty", 4, 0}, {"Instigator", "ObjectProperty", 8, 8},
+                    {"Tags", "StructProperty", sizeof(FGameplayTagContainer), 16},
+                    {"ComponentHit", "ObjectProperty", 8, 48}});
+                if (!hit.Function) error = "ApplyDamageToCore signature unavailable";
+                else { hit.At<float>() = static_cast<float>(*requested); hit.Run(parts[0]); }
+            }
+        }
+        QaProbeActionTrace::Snapshot(Report, actor, Report.Subjects[row.Subject].Role,
+            point, row.Action, row.Row, requested, error);
+    }
+}
+inline bool BeginActionHealth() {
+    if (std::none_of(ActionRows.begin(), ActionRows.end(), [](const auto& row) { return !row.Montage; })) return false;
+    PhaseStart = GetTickCount64();
+    Report.Begin("action-health-trace");
+    TraceActionHealth("before-health-trace", false);
+    for (const auto& subject : Actors) {
+        auto* actor = subject.Actor;
+        auto* controller = actor && !actor->IsActorBeingDestroyed() ? actor->Controller : nullptr;
+        auto* brain = controller && controller->IsA(AAIController::StaticClass()) ? static_cast<AAIController*>(controller)->BrainComponent : nullptr;
+        QaProbeActionRoute::Call restart(brain, "RestartLogic", {});
+        if (restart.Function) restart.Run(brain);
+        else Report.Fail(Report.Stages.back(), "stock brain RestartLogic signature unavailable");
+    }
+    ActionHealthStep = 0;
+    TraceActionHealth("core-damage-step-0", true);
+    StageEnd = GetTickCount64() + 6000;
+    NextHealthSample = GetTickCount64() + 1000;
+    Current = Phase::ActionHealth;
+    Write();
+    return true;
+}
 // GetMetadataTableName (behemoth interface): the key the actor's loot and metadata rows use (D33).
 inline std::string MetadataKey(AArchonBehemoth* monster) {
     auto* get = FeatureSupport::FindFunction(monster, "GetMetadataTableName");
@@ -621,6 +676,31 @@ inline void TickServer(UWorld* world, int port) {
     }
     if (Current == Phase::Actions) {
         if (!TickActions(world)) return;
+        if (BeginActionHealth()) return;
+    }
+    if (Current == Phase::ActionHealth) {
+        const auto now = GetTickCount64();
+        if (now < StageEnd) {
+            if (now >= NextHealthSample) {
+                TraceActionHealth("health-step-" + std::to_string(ActionHealthStep), false);
+                NextHealthSample = now + 1000; Write();
+            }
+            return;
+        }
+        TraceActionHealth("settled-health-step-" + std::to_string(ActionHealthStep), false);
+        if (++ActionHealthStep < 3) {
+            TraceActionHealth("core-damage-step-" + std::to_string(ActionHealthStep), true);
+            StageEnd = GetTickCount64() + 6000;
+            NextHealthSample = GetTickCount64() + 1000;
+            Write(); return;
+        }
+        auto& stage = Report.Stages.back();
+        stage.Seconds = Seconds(PhaseStart);
+        if (stage.Status == "running") stage.Status = "ok";
+        stage.Detail += " bounded health diagnostic complete; actual health/state in actionTrace; no action acceptance inferred";
+        for (const auto& actor : Actors) StopAi(actor.Actor);
+    }
+    if (Current == Phase::Actions || Current == Phase::ActionHealth) {
         PhaseStart = GetTickCount64();
         Report.Begin("parts");
         Write();

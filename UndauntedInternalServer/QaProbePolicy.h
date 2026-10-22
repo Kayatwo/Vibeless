@@ -348,7 +348,18 @@ struct ActionTrace {
     std::optional<bool> Available;
     std::optional<int> OverrideCount;
     std::vector<std::string> Overrides;
+    std::optional<double> Health, MaxHealth, RequestedDamage;
+    std::optional<bool> Enraged, AetherCharged;
+    std::optional<int> ComponentCount;
+    std::vector<std::string> Components;
 };
+// Diagnostic damage targets 75/50/25 percent without writing health or action fields. Actual
+// health must be measured afterwards: the stock damage route may scale or reject the request.
+inline std::optional<double> ActionTraceDamage(double health, double maximum, int step) {
+    if (!std::isfinite(health) || !std::isfinite(maximum) || maximum <= 0 || health <= 0
+        || health > maximum * 1.01 || step < 0 || step > 2) return std::nullopt;
+    return (std::min)((std::max)(0.0, health - maximum * (0.75 - step * 0.25)), health * 0.5);
+}
 inline constexpr size_t MaxActionTrace = 256;
 struct Report {
     std::string Id, Side = "server", Creature, Control, Map, Runtime, Verdict = "running", Reason, CurrentAsset;
@@ -449,6 +460,14 @@ struct Report {
                     + ", \"overrideCount\": " + (t.OverrideCount ? std::to_string(*t.OverrideCount) : "null")
                     + ", \"error\": " + Quote(t.Error) + ", \"overrides\": [";
                 for (size_t j = 0; j < t.Overrides.size(); ++j) out += std::string(j ? ", " : "") + Quote(t.Overrides[j]);
+                out += "], \"health\": " + (t.Health ? Number(*t.Health) : "null")
+                    + ", \"maxHealth\": " + (t.MaxHealth ? Number(*t.MaxHealth) : "null")
+                    + ", \"requestedDamage\": " + (t.RequestedDamage ? Number(*t.RequestedDamage) : "null")
+                    + ", \"enraged\": " + (t.Enraged ? (*t.Enraged ? "true" : "false") : "null")
+                    + ", \"aetherCharged\": " + (t.AetherCharged ? (*t.AetherCharged ? "true" : "false") : "null")
+                    + ", \"componentCount\": " + (t.ComponentCount ? std::to_string(*t.ComponentCount) : "null")
+                    + ", \"components\": [";
+                for (size_t j = 0; j < t.Components.size(); ++j) out += std::string(j ? ", " : "") + Quote(t.Components[j]);
                 out += "]}";
             }
             out += "\n  ]}";

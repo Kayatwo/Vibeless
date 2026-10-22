@@ -1,5 +1,6 @@
 #include "../QaProbePolicy.h"
 #include <cassert>
+#include <limits>
 #include <string>
 using namespace QaProbePolicy;
 
@@ -158,11 +159,17 @@ int main() {
     ActionTrace trace;
     trace.Role = "control"; trace.Point = "before-stop-ai"; trace.Row = "barrelchg";
     trace.BaseValue = 0; trace.Available = false; trace.OverrideCount = 0;
+    trace.Health = 21000; trace.MaxHealth = 28000; trace.RequestedDamage = 7000;
+    trace.Enraged = false; trace.AetherCharged = true; trace.ComponentCount = 1;
+    trace.Components = {"actor:health_rules=stock.action_swapper_bpc_C"};
     acted.Trace(trace);
     auto traced = acted.ToJson();
     assert(traced.find("\"baseValue\": 0.000, \"available\": false") != std::string::npos);
     assert(traced.find("\"overrideCount\": 0") != std::string::npos);
     assert(traced.find("\"missingEventsInconclusive\": true") != std::string::npos);
+    assert(traced.find("\"health\": 21000.000, \"maxHealth\": 28000.000, \"requestedDamage\": 7000.000") != std::string::npos);
+    assert(traced.find("\"enraged\": false, \"aetherCharged\": true, \"componentCount\": 1") != std::string::npos);
+    assert(traced.find("actor:health_rules=stock.action_swapper_bpc_C") != std::string::npos);
     trace.BaseValue.reset(); trace.Available.reset(); trace.OverrideCount.reset();
     trace.Error = "signature unavailable";
     acted.Trace(trace);
@@ -171,6 +178,16 @@ int main() {
     assert(acted.ActionTraces.size() == MaxActionTrace && acted.ActionTracesDropped == 3);
     acted.Actions = {none};
     assert(!JudgeActions(acted.Actions).empty());
+    assert(ActionTraceDamage(28000, 28000, 0) == 7000);
+    assert(ActionTraceDamage(21000, 28000, 1) == 7000);
+    assert(ActionTraceDamage(14000, 28000, 2) == 7000);
+    assert(ActionTraceDamage(2000, 28000, 2) == 0); // never heal a subject already below target
+    assert(ActionTraceDamage(28000, 28000, 2) == 14000); // one call is bounded to half current health
+    assert(!ActionTraceDamage(0, 28000, 0) && !ActionTraceDamage(1, 0, 0));
+    assert(!ActionTraceDamage(28000, 28000, 3) && !ActionTraceDamage(28000, 28000, -1));
+    assert(!ActionTraceDamage(30000, 28000, 0));
+    assert(!ActionTraceDamage(std::numeric_limits<double>::infinity(), 28000, 0));
+    assert(!ActionTraceDamage(28000, std::numeric_limits<double>::quiet_NaN(), 0));
 
     // Client streaming: a full chain down to 1x1, less the combined LOD bias, at least one mip.
     assert(FullChainMips(2048, 2048, 0) == 12 && FullChainMips(2048, 512, 1) == 11);

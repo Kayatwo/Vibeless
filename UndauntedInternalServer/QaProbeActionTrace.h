@@ -38,6 +38,31 @@ inline void Error(QaProbePolicy::ActionTrace& t, const char* message) {
     if (!t.Error.empty()) t.Error += "; ";
     t.Error += message;
 }
+inline std::optional<bool> Flag(AArchonBehemoth* actor, const char* name) {
+    QaProbeActionRoute::Call call(actor, name, {{"ReturnValue", "BoolProperty", 1, 0}});
+    if (!call.Function) return std::nullopt;
+    call.Run(actor);
+    return call.At<bool>();
+}
+inline void Components(AArchonBehemoth* actor, QaProbePolicy::ActionTrace& t) {
+    int count = 0;
+    for (AActor* owner : {static_cast<AActor*>(actor), static_cast<AActor*>(actor->Controller)}) {
+        if (!owner) continue;
+        auto components = owner->K2_GetComponentsByClass(UActorComponent::StaticClass());
+        const bool valid = components.Num() >= 0 && components.Num() <= 128;
+        if (valid) for (auto* component : components) {
+            if (!component || component->GetOwner() != owner) {
+                Error(t, "component ownership mismatch"); continue;
+            }
+            ++count;
+            t.Components.push_back(std::string(owner == actor ? "actor:" : "controller:")
+                + component->GetName() + "=" + FeatureSupport::ObjectPath(component->Class));
+        }
+        components.Free();
+        if (!valid) { Error(t, "component inventory exceeded bound"); return; }
+    }
+    t.ComponentCount = count;
+}
 inline void State(AArchonBehemoth* actor, QaProbePolicy::ActionTrace& t) {
     t.ObjectClass = FeatureSupport::ObjectPath(actor->Class);
     auto* controller = actor->Controller;
@@ -75,11 +100,19 @@ inline void State(AArchonBehemoth* actor, QaProbePolicy::ActionTrace& t) {
     }
 }
 inline void Snapshot(QaProbePolicy::Report& report, AArchonBehemoth* actor, const std::string& role,
-    const std::string& point, UClass* actionClass = nullptr, const std::string& row = {}) {
+    const std::string& point, UClass* actionClass = nullptr, const std::string& row = {},
+    std::optional<double> damage = std::nullopt, const std::string& error = {}) {
     if (!actor || actor->IsActorBeingDestroyed()) return;
     QaProbePolicy::ActionTrace t;
     t.Role = role; t.Point = point; t.Row = row;
+    t.RequestedDamage = damage; t.Error = error;
     State(actor, t);
+    const auto health = actor->GetCurrentHealth(), maximum = actor->GetMaxHealth();
+    if (std::isfinite(health) && std::isfinite(maximum)) { t.Health = health; t.MaxHealth = maximum; }
+    else Error(t, "non-finite health");
+    t.Enraged = Flag(actor, "IsEnraged"); t.AetherCharged = Flag(actor, "IsAetherCharged");
+    if (!t.Enraged || !t.AetherCharged) Error(t, "rage/aether query signature unavailable");
+    Components(actor, t);
     if (actionClass) {
         t.Action = FeatureSupport::ObjectPath(actionClass);
         Querying = true;
