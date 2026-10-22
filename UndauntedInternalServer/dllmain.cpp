@@ -68,6 +68,7 @@ using namespace SDK;
 #include "HuntPresentation.h"
 #include "TestArena.h"
 #include "TestArenaMenu.h"
+#include "QaProbeClient.h"
 #endif
 // Features reach the game only through the feature host's events (Phase 2).
 #include "VibelessFeatures.h"
