@@ -160,7 +160,10 @@ inline constexpr double ActionCapSeconds = 15;
 // One row of the creature's action-set table, forced on the live server creature with its AI
 // stopped: the row's montage played to its end. Notifies: Blueprint notifies on the creature's mesh
 // (native notifies such as sounds do not pass through ProcessEvent). Spawned: actors the creature
-// owned or instigated that appeared while it played.
+// owned or instigated that appeared while it played. SpawnedClasses: the spawn census of those
+// actors, one entry per class with its Blueprint ancestry (nearest first); bounded, drops counted.
+inline constexpr size_t MaxSpawnedClasses = 16, MaxSpawnAncestors = 8;
+struct SpawnedClass { std::string Class; std::vector<std::string> Ancestors; int Count = 0; };
 struct ActionResult {
     std::string Row, Action, Montage;
     bool Played = false;
@@ -168,7 +171,16 @@ struct ActionResult {
     int Notifies = 0, Spawned = 0;
     std::string Role = "creature", Route = "table-montage", SelectedMontage = {}, Error = {};
     bool Observed = false, Completed = false;
+    std::vector<SpawnedClass> SpawnedClasses;
+    int SpawnedClassesDropped = 0;
 };
+// Adds one spawned actor of `cls` to the census. Ancestors beyond the bound are cut, not guessed.
+inline void RecordSpawn(ActionResult& action, const std::string& cls, std::vector<std::string> ancestors) {
+    for (auto& entry : action.SpawnedClasses) if (entry.Class == cls) { ++entry.Count; return; }
+    if (cls.empty() || action.SpawnedClasses.size() >= MaxSpawnedClasses) { ++action.SpawnedClassesDropped; return; }
+    if (ancestors.size() > MaxSpawnAncestors) ancestors.resize(MaxSpawnAncestors);
+    action.SpawnedClasses.push_back({cls, std::move(ancestors), 1});
+}
 // "" when every row played; otherwise why the actions stage fails.
 inline std::string JudgeActions(const std::vector<ActionResult>& actions) {
     // A no-table-montage row needs real execution on both the creature and its stock control.
@@ -441,7 +453,15 @@ struct Report {
                     + ", \"notifies\": " + std::to_string(a.Notifies) + ", \"spawned\": " + std::to_string(a.Spawned)
                     + ", \"role\": " + Quote(a.Role) + ", \"route\": " + Quote(a.Route)
                     + ", \"selectedMontage\": " + Quote(a.SelectedMontage) + ", \"error\": " + Quote(a.Error)
-                    + ", \"observed\": " + (a.Observed ? "true" : "false") + ", \"completed\": " + (a.Completed ? "true" : "false") + "}";
+                    + ", \"observed\": " + (a.Observed ? "true" : "false") + ", \"completed\": " + (a.Completed ? "true" : "false")
+                    + ", \"spawnedClassesDropped\": " + std::to_string(a.SpawnedClassesDropped) + ", \"spawnedClasses\": [";
+                for (size_t j = 0; j < a.SpawnedClasses.size(); ++j) {
+                    const auto& c = a.SpawnedClasses[j];
+                    out += std::string(j ? ", " : "") + "{\"class\": " + Quote(c.Class) + ", \"count\": " + std::to_string(c.Count) + ", \"ancestors\": [";
+                    for (size_t k = 0; k < c.Ancestors.size(); ++k) out += std::string(k ? ", " : "") + Quote(c.Ancestors[k]);
+                    out += "]}";
+                }
+                out += "]}";
             }
             out += "\n  ]";
         }

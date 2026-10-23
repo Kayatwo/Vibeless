@@ -153,6 +153,26 @@ int main() {
     assert(acted.ToJson().find("\"route\": \"action-class\"") != std::string::npos);
     assert(acted.ToJson().find("\"role\": \"control\"") != std::string::npos);
     assert(acted.ToJson().find("\"observed\": true, \"completed\": true") != std::string::npos);
+    assert(acted.ToJson().find("\"spawnedClassesDropped\": 0, \"spawnedClasses\": []") != std::string::npos);
+
+    // Spawn census: one entry per class with counts and bounded ancestry; overflow is counted, never
+    // silently truncated, and an empty class name is a drop rather than a fabricated entry.
+    ActionResult clone = slam;
+    const std::string stockClone = "/Game/Monsters/moonface/crowbear_clone_bp.crowbear_clone_bp_C";
+    RecordSpawn(clone, "/Game/Monsters/bloodshotshrowd144/crowbear_alpha_clone_bp.crowbear_alpha_clone_bp_C",
+        {stockClone, "/Game/Monsters/moonface/crowbear_archetype_bp.crowbear_archetype_bp_C"});
+    RecordSpawn(clone, "/Game/Monsters/bloodshotshrowd144/crowbear_alpha_clone_bp.crowbear_alpha_clone_bp_C", {});
+    assert(clone.SpawnedClasses.size() == 1 && clone.SpawnedClasses[0].Count == 2 && clone.SpawnedClasses[0].Ancestors[0] == stockClone);
+    RecordSpawn(clone, "", {});
+    assert(clone.SpawnedClassesDropped == 1);
+    RecordSpawn(clone, "/Game/X/long.long_C", std::vector<std::string>(MaxSpawnAncestors + 3, "/Game/X/a.a_C"));
+    assert(clone.SpawnedClasses.back().Ancestors.size() == MaxSpawnAncestors);
+    for (size_t i = 0; i < MaxSpawnedClasses + 2; ++i) RecordSpawn(clone, "/Game/X/c" + std::to_string(i) + ".c_C", {});
+    assert(clone.SpawnedClasses.size() == MaxSpawnedClasses && clone.SpawnedClassesDropped == 1 + 4);
+    acted.Actions = {clone};
+    assert(acted.ToJson().find("{\"class\": \"/Game/Monsters/bloodshotshrowd144/crowbear_alpha_clone_bp.crowbear_alpha_clone_bp_C\", \"count\": 2, \"ancestors\": [\""
+        + stockClone + "\", ") != std::string::npos);
+    assert(acted.ToJson().find("\"spawnedClassesDropped\": 5") != std::string::npos);
 
     // Diagnostic state must distinguish unavailable from unknown, stay bounded and never waive
     // a failed action (including the stock-negative case).

@@ -245,13 +245,21 @@ inline std::vector<ActionRow> ActionTable() {
         }
     return rows;
 }
-// Actors the creature owns or instigated that are not yet in ActionActors; adds them.
-inline int NewOwnedActors(UWorld* world, AArchonBehemoth* monster) {
+// Actors the creature owns or instigated that are not yet in ActionActors; adds them. With `census`,
+// each new actor's class and Blueprint ancestry go into that action's spawn census.
+inline int NewOwnedActors(UWorld* world, AArchonBehemoth* monster, QaProbePolicy::ActionResult* census = nullptr) {
     TArray<AActor*> actors;
     UGameplayStatics::GetAllActorsOfClass(world, AActor::StaticClass(), &actors);
     int added = 0;
-    for (auto* actor : actors)
-        if (actor && actor != monster && (actor->Owner == monster || actor->Instigator == monster) && ActionActors.insert(actor).second) ++added;
+    for (auto* actor : actors) {
+        if (!actor || actor == monster || (actor->Owner != monster && actor->Instigator != monster) || !ActionActors.insert(actor).second) continue;
+        ++added;
+        if (!census) continue;
+        std::vector<std::string> ancestors;
+        for (auto* type = actor->Class ? actor->Class->SuperStruct : nullptr; type && ancestors.size() < QaProbePolicy::MaxSpawnAncestors; type = type->SuperStruct)
+            ancestors.push_back(FeatureSupport::ObjectPath(type));
+        QaProbePolicy::RecordSpawn(*census, FeatureSupport::ObjectPath(actor->Class), std::move(ancestors));
+    }
     return added;
 }
 struct LiveKill { size_t Subject = 0, Result = 0; };
@@ -343,7 +351,7 @@ inline bool TickActions(UWorld* world) {
         ActionEnd = now + static_cast<ULONGLONG>((std::max)(0.25, cap) * 1000);
         return false;
     }
-    ActionSpawned += NewOwnedActors(world, monster);
+    ActionSpawned += NewOwnedActors(world, monster, &Report.Actions.back());
     const auto& row = ActionRows[ActionIndex];
     if (!row.Montage) {
         auto& result = Report.Actions.back();
