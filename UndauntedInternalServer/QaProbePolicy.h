@@ -171,7 +171,7 @@ struct ActionResult {
     int Notifies = 0, Spawned = 0;
     std::string Role = "creature", Route = "table-montage", SelectedMontage = {}, Error = {};
     bool Observed = false, Completed = false;
-    std::vector<SpawnedClass> SpawnedClasses;
+    std::vector<SpawnedClass> SpawnedClasses = {};
     int SpawnedClassesDropped = 0;
 };
 // Adds one spawned actor of `cls` to the census. Ancestors beyond the bound are cut, not guessed.
