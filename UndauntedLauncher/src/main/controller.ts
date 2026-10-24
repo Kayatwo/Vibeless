@@ -193,7 +193,8 @@ export class Controller {
   private pollTimer: NodeJS.Timeout | null = null;
   private news: NewsItem[] | null = null;
   private newsCheckedAt = -Infinity;
-  private newsLoading = false;
+  private newsTask: Promise<void> | null = null;
+  private extrasTask: Promise<void> | null = null;
   private branding: Branding | null = null;
   private art = new Map<string, { file: string; type: string }>();
   private relay: Relay | null = null;
@@ -670,36 +671,55 @@ export class Controller {
     await this.pollStatus();
   }
 
-  private async refreshNews(): Promise<void> {
+  private refreshNews(): Promise<void> {
+    if (this.shuttingDown) return Promise.resolve();
+    if (this.newsTask) return this.newsTask;
     const ep = this.contentEndpoint();
-    if (!ep || this.newsLoading || (this.news !== null && Date.now() - this.newsCheckedAt < 60000)) return;
-    this.newsLoading = true;
+    if (!ep || (this.news !== null && Date.now() - this.newsCheckedAt < 60000)) return Promise.resolve();
     const generation = this.statusGen;
     this.newsCheckedAt = Date.now();
-    try {
+    this.newsTask = (async () => {
       const items = await fetchNews(ep, this.news ?? []);
-      if (generation === this.statusGen) { this.news = items; this.publish(); }
-    } finally { this.newsLoading = false; }
+      if (!this.shuttingDown && generation === this.statusGen) { this.news = items; this.publish(); }
+    })().catch((e) => log.warn(`could not refresh news: ${describeError(e)}`))
+      .finally(() => { this.newsTask = null; });
+    return this.newsTask;
   }
 
-  private async loadExtras(): Promise<void> {
+  private loadExtras(): Promise<void> {
+    if (this.shuttingDown) return Promise.resolve();
+    if (!this.extrasTask) {
+      this.extrasTask = this.fetchExtras().catch((e) => log.warn(`could not load branding: ${describeError(e)}`))
+        .finally(() => { this.extrasTask = null; });
+    }
+    return this.extrasTask;
+  }
+
+  private async fetchExtras(): Promise<void> {
     const ep = this.contentEndpoint();
     if (!ep) return;
+    const generation = this.statusGen;
+    const stale = () => this.shuttingDown || generation !== this.statusGen;
     await this.refreshNews();
+    if (stale()) return;
     if (this.branding === null) {
       const index = await fetchBrandingIndex(ep);
+      if (stale()) return;
       const backgrounds: Branding["backgrounds"] = [];
       const cacheDir = path.join(this.p.userDataDir, "art-cache");
       await fsp.mkdir(cacheDir, { recursive: true });
       for (const b of index.backgrounds) {
         const img = await fetchBrandingImage(ep, b.path);
+        if (stale()) return;
         if (!img) continue;
         const id = createHash("sha256").update(img.data).digest("hex");
         const file = path.join(cacheDir, id);
         await fsp.writeFile(file, img.data);
+        if (stale()) return;
         this.art.set(id, { file, type: img.type });
         backgrounds.push({ url: `dr-art://bg/${id}`, credit: b.credit });
       }
+      if (stale()) return;
       this.branding = { backgrounds, accent: index.accent };
     }
     this.publish();
@@ -1676,6 +1696,9 @@ export class Controller {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true;
+    // Content loads are started in the background by connect/status polling.
+    // Drain them before callers can remove the profile or exit the process.
+    await Promise.all([this.extrasTask, this.newsTask]);
     await this.saveTask?.catch(() => undefined);
     this.setStatusPolling(false);
     this.job?.cancel();

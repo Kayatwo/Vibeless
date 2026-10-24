@@ -42,6 +42,7 @@ let gateway: https.Server;
 let meta: FakeMetagame;
 let content: FakeContentServer;
 let gatewayRequests: string[] = [];
+let holdBranding: ((response: http.ServerResponse) => void) | null = null;
 let deviceBlocked = false;
 const files = makeFiles();
 const manifest: GameManifest = (() => {
@@ -65,6 +66,7 @@ before(async () => {
   content = new FakeContentServer({ key: "unused", files });
   gateway = https.createServer({ cert: cert.certPem, key: cert.keyPem }, (req, res) => {
     gatewayRequests.push(`${req.method} ${req.url}`);
+    if (req.url === "/content/v1/branding" && holdBranding) { holdBranding(res); return; }
     if (req.url === '/undaunted/api/DeviceSignals' && deviceBlocked) {
       req.resume(); res.writeHead(403, {'content-type':'application/json'});
       res.end(JSON.stringify({error:'device_banned',reason:'Test restriction'})); return;
@@ -1350,4 +1352,31 @@ test("connected launcher refreshes news without restarting and bounds polling", 
     await waitUntil(() => hx.c.getNews()[0]?.title === "After");
     assert.equal(count(), before + 1);
   } finally { content.opts.news = previous; await hx.c.shutdown(); }
+});
+
+test("shutdown drains a pending branding load and prevents late cache writes", async () => {
+  const hx = harness();
+  const held: http.ServerResponse[] = [];
+  holdBranding = (response) => held.push(response);
+  let shutdown: Promise<void> | undefined;
+  try {
+    await hx.c.init();
+    await hx.c.submitInvite(invite(cert.fingerprint));
+    await waitUntil(() => held.length > 0);
+    await hx.c.pollStatus();
+    await hx.c.pollStatus();
+    let finished = false;
+    shutdown = hx.c.shutdown().then(() => { finished = true; });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(finished, false, "shutdown must wait for the pending response");
+    assert.equal(held.length, 1, "status polls must share the pending branding load");
+    held[0].writeHead(200, { "content-type": "application/json" });
+    held[0].end(JSON.stringify({ backgrounds: [], accent: null }));
+    await shutdown;
+    assert.equal(existsSync(path.join(hx.userData, "art-cache")), false, "a stopped controller must not create its artwork cache");
+  } finally {
+    holdBranding = null;
+    for (const response of held) if (!response.writableEnded) response.end(JSON.stringify({ backgrounds: [], accent: null }));
+    await (shutdown ?? hx.c.shutdown());
+  }
 });

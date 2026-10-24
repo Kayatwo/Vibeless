@@ -6,8 +6,8 @@
 
 struct Object { bool Class = false, Table = false; Object* Defaults = nullptr; std::map<std::string, Object*> Fields; };
 int main() {
-    Object stockTable{false, true}, privateTable{false, true}, unrelatedInventoryTable{false, true};
-    Object stockDefaults, privateDefaults, stockClass{true}, privateClass{true}, stock, creature;
+    Object stockTable{false, true, nullptr, {}}, privateTable{false, true, nullptr, {}}, unrelatedInventoryTable{false, true, nullptr, {}};
+    Object stockDefaults, privateDefaults, stockClass{true, false, nullptr, {}}, privateClass{true, false, nullptr, {}}, stock, creature;
     stockClass.Defaults = &stockDefaults; privateClass.Defaults = &privateDefaults;
     stockDefaults.Fields["ActionSetTable(EnsureYouCleanOutYourActionSetScript!)"] = &stockTable;
     privateDefaults.Fields["ActionSetTable(EnsureYouCleanOutYourActionSetScript!)"] = &privateTable;
