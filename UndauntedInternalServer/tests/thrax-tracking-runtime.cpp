@@ -7,6 +7,28 @@
 using namespace ThraxTrackingRuntime;
 static void Require(bool condition) { if (!condition) std::abort(); }
 int main() {
+    CountAuditPolicy audit;
+    using Kind = CountAuditPolicy::Kind;
+    unsigned countReports = 0;
+    for (std::uint64_t i = 0; i < 32; ++i) {
+        Require(audit.Next(i * 5000, 0, 0) == Kind::Periodic); ++countReports;
+        Require(audit.Next(i * 5000 + 1, 0, 0) == Kind::None);
+    }
+    // A long action sweep exhausts periodic output before death/reinitialization.
+    Require(audit.Next(300000, 0, 0) == Kind::None);
+    for (std::uint64_t i = 1; i <= 32; ++i) {
+        Require(audit.Next(300000 + i, i, i - 1) == Kind::Lifecycle); ++countReports;
+        Require(audit.Next(300000 + i, i, i - 1) == Kind::None);
+    }
+    Require(countReports == 64);
+    Require(audit.Next(900000, 100, 100) == Kind::None);
+    CountAuditPolicy immediate;
+    Require(immediate.Next(0, 0, 0) == Kind::Periodic);
+    Require(immediate.Next(1, 1, 0) == Kind::Lifecycle);
+    Require(immediate.Next(2, 1, 1) == Kind::Lifecycle);
+    Require(immediate.Next(3, 2, 1) == Kind::Lifecycle);
+    Require(immediate.Next(4999, 2, 1) == Kind::None);
+    Require(immediate.Next(5000, 2, 1) == Kind::Periodic);
     Require(EffectiveAlpha(0, 1, 1) == 0 && EffectiveAlpha(1, .5f, .5f) == .25f);
     Require(EffectiveAlpha(1, 2, 2) == 1 && EffectiveAlpha(1, -1, 1) == 0);
     Require(!EffectiveAlpha(1, std::numeric_limits<float>::infinity(), 0));

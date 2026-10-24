@@ -9,6 +9,25 @@ inline constexpr std::uintptr_t NodeVtableRva = 0x47c4dd0;
 inline constexpr std::uintptr_t InitializeRva = 0xa78f20, UpdateRva = 0x2d4fda0;
 inline constexpr std::uintptr_t DestroyRva = 0x19d32e0, WeakAssignRva = 0x1f77250, WeakGetRva = 0x1f79240;
 inline constexpr size_t UpdateTraversalOffset = 0x418;
+// Host-tick only. Periodic activity cannot exhaust the separate late-lifecycle budget.
+class CountAuditPolicy {
+public:
+    enum class Kind { None, Periodic, Lifecycle };
+    Kind Next(std::uint64_t now, std::uint64_t initialized, std::uint64_t ended) {
+        if (LifecycleReports < 32 && (initialized != LastInitialized || ended != LastEnded)) {
+            LastInitialized = initialized; LastEnded = ended; ++LifecycleReports;
+            return Kind::Lifecycle;
+        }
+        if (PeriodicReports < 32 && (!PeriodicReports || now - LastPeriodicTime >= 5000)) {
+            LastPeriodicTime = now; ++PeriodicReports;
+            return Kind::Periodic;
+        }
+        return Kind::None;
+    }
+private:
+    unsigned PeriodicReports = 0, LifecycleReports = 0;
+    std::uint64_t LastPeriodicTime = 0, LastInitialized = 0, LastEnded = 0;
+};
 struct WeakHandle { std::int32_t Index = -1, Serial = 0; };
 struct UpdateContext { void* Proxy = nullptr; void* Shared = nullptr; float Weight = 0, RootWeight = 0, Delta = 0; };
 struct alignas(16) BoneTransform { std::int32_t Index = -1; std::array<std::byte, 12> Padding{}; Abi::Transform Value; };

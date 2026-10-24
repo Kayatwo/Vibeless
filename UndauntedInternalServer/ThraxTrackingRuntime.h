@@ -128,8 +128,7 @@ inline std::array<AppliedSample, 32> AuditSamples{};
 inline std::array<std::tuple<std::uint64_t, std::uint64_t, std::int16_t>, 32> AuditKeys{};
 inline size_t AuditReserved = 0, AuditPending = 0;
 inline std::wstring AuditFile;
-inline unsigned AuditReports = 0;
-inline ULONGLONG LastAuditTime = 0;
+inline CountAuditPolicy CountAudit;
 inline void Record(AppliedSample sample) {
     std::lock_guard lock(AuditMutex);
     if (AuditReserved == AuditSamples.size()) return;
@@ -262,12 +261,14 @@ inline void Tick() {
     std::filesystem::create_directories(directory, error); if (error) return;
     std::ofstream out(directory / AuditFile, std::ios::app); if (!out) return;
     out << std::setprecision(std::numeric_limits<float>::max_digits10);
-    const auto now = GetTickCount64();
-    if (AuditReports < 32 && (!LastAuditTime || now - LastAuditTime >= 5000)) {
-        ++AuditReports; LastAuditTime = now;
-        out << "{\"event\":\"tracking_counts\",\"initialized\":" << Initialized.load() << ",\"updated\":" << Updated.load()
+    const auto initialized = Initialized.load(), ended = Ended.load();
+    const auto reportKind = CountAudit.Next(GetTickCount64(), initialized, ended);
+    if (reportKind != CountAuditPolicy::Kind::None) {
+        out << "{\"event\":\"tracking_counts\",\"reason\":\""
+            << (reportKind == CountAuditPolicy::Kind::Lifecycle ? "lifecycle" : "periodic")
+            << "\",\"initialized\":" << initialized << ",\"updated\":" << Updated.load()
             << ",\"activeUpdates\":" << ActiveUpdates.load() << ",\"applied\":" << Applied.load()
-            << ",\"rejected\":" << Rejected.load() << ",\"ended\":" << Ended.load() << "}\n";
+            << ",\"rejected\":" << Rejected.load() << ",\"ended\":" << ended << "}\n";
     }
     std::array<AppliedSample, 32> samples;
     size_t count = 0;
