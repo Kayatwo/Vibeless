@@ -158,6 +158,9 @@
     <ClInclude Include="VibelessContent.h" />
     <ClInclude Include="VibelessCompatibility.h" />
     <ClInclude Include="VibelessFeatures.h" />
+    <ClInclude Include="ThraxTrackingState.h" />
+    <ClInclude Include="ThraxTrackingProbePolicy.h" />
+    <ClInclude Include="ThraxTrackingProbe.h" />
     <ClInclude Include="VibelessVersion.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Networking.h" />

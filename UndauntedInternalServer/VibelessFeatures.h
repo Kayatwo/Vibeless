@@ -9,6 +9,8 @@
 //   reward-probes   read-only reward diagnostics (server only, off unless listed; D10)
 //   qa-probe        engine probe of a creature package (internal, off unless listed; acts only for
 //                   a qa-* profile with a DR_QA_PROBE request; QaProbe.h server, QaProbeClient.h client)
+//   thrax-tracking-probe  observation-only N1 pose diagnostics (off by default;
+//                   exact qa-probe profile and DR_THRAX_TRACKING_PROBE=1 required)
 // A core-only build (VIBELESS_FEATURES=0) registers none of them.
 #pragma once
 #include <cstdlib>
@@ -77,6 +79,7 @@ inline void WriteReport(FeatureHost::Side side, int port) {
 }
 
 #if VIBELESS_FEATURES
+#include "ThraxTrackingProbe.h"
 namespace Vibeless {
 inline void RegisterFeatures(uintptr_t base) {
     using FeatureHost::Event;
@@ -91,6 +94,15 @@ inline void RegisterFeatures(uintptr_t base) {
     const auto driver = [](const Tick& t) { return static_cast<UNetDriver*>(t.Driver); };
     const auto object = [](const Event& e) { return static_cast<UObject*>(e.Object); };
     const auto function = [](const Event& e) { return static_cast<UFunction*>(e.Function); };
+
+    Feature trackingProbe;
+    trackingProbe.Id = "thrax-tracking-probe";
+    trackingProbe.Version = "0.1.0";
+    trackingProbe.DefaultEnabled = false;
+    trackingProbe.Install = [base](Side side) { return ThraxTrackingProbe::Install(base, side); };
+    trackingProbe.ClientTickAfter = [](const Tick&) { ThraxTrackingProbe::Tick(); };
+    trackingProbe.ServerTick = [](const Tick&) { ThraxTrackingProbe::Tick(); };
+    add(std::move(trackingProbe));
 
     Feature services;
     services.Id = "hunt-services";
