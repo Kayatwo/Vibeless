@@ -11,6 +11,8 @@
 //                   a qa-* profile with a DR_QA_PROBE request; QaProbe.h server, QaProbeClient.h client)
 //   thrax-tracking-probe  observation-only N1 pose diagnostics (off by default;
 //                   exact qa-probe profile and DR_THRAX_TRACKING_PROBE=1 required)
+//   thrax-tracking  private production-graph candidate (off by default;
+//                   exact qa-probe profile and DR_THRAX_TRACKING=1 required)
 // A core-only build (VIBELESS_FEATURES=0) registers none of them.
 #pragma once
 #include <cstdlib>
@@ -80,6 +82,7 @@ inline void WriteReport(FeatureHost::Side side, int port) {
 
 #if VIBELESS_FEATURES
 #include "ThraxTrackingProbe.h"
+#include "ThraxTrackingRuntime.h"
 namespace Vibeless {
 inline void RegisterFeatures(uintptr_t base) {
     using FeatureHost::Event;
@@ -103,6 +106,15 @@ inline void RegisterFeatures(uintptr_t base) {
     trackingProbe.ClientTickAfter = [](const Tick&) { ThraxTrackingProbe::Tick(); };
     trackingProbe.ServerTick = [](const Tick&) { ThraxTrackingProbe::Tick(); };
     add(std::move(trackingProbe));
+
+    Feature tracking;
+    tracking.Id = "thrax-tracking";
+    tracking.Version = "0.1.0";
+    tracking.DefaultEnabled = false;
+    tracking.Install = [base](Side side) { return ThraxTrackingRuntime::Install(base, side); };
+    tracking.ClientTickAfter = [](const Tick&) { ThraxTrackingRuntime::Tick(); };
+    tracking.ServerTick = [](const Tick&) { ThraxTrackingRuntime::Tick(); };
+    add(std::move(tracking));
 
     Feature services;
     services.Id = "hunt-services";

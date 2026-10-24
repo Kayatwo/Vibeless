@@ -295,7 +295,7 @@ jobs:
             [[ "$source" == */server-locale.cpp || "$source" == */dualsense.cpp ]] && continue
             [[ "$source" == */portrait-sizing.cpp || "$source" == */unreal-array.cpp ]] && continue
             name="$(basename "$source" .cpp)"
-            g++ -std=c++20 -Wall -Wextra -Werror -O2 "$source" -o "$out/$name"
+            g++ -std=c++20 -Wall -Wextra -Werror -O2 -ffp-contract=off "$source" -o "$out/$name"
             "$out/$name"
             echo "PASS $name"
           done
@@ -339,8 +339,8 @@ jobs:
           @"
           @call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           @if errorlevel 1 exit /b 1
-          @for %%t in (server-locale dualsense console-visibility feature-host compatibility content-registry thrax-tracking-state thrax-tracking-probe) do @(
-          cl /nologo /std:c++20 /EHsc /W4 /WX /O2 UndauntedInternalServer\tests\%%t.cpp /Fe:"$env:RUNNER_TEMP\%%t.exe" /Fo:"$env:RUNNER_TEMP\%%t.obj" user32.lib
+          @for %%t in (server-locale dualsense console-visibility feature-host compatibility content-registry thrax-tracking-state thrax-tracking-probe thrax-tracking-runtime thrax-tracking-integration qa-probe-action-selection) do @(
+          cl /nologo /std:c++20 /EHsc /W4 /WX /O2 /fp:strict UndauntedInternalServer\tests\%%t.cpp /Fe:"$env:RUNNER_TEMP\%%t.exe" /Fo:"$env:RUNNER_TEMP\%%t.obj" user32.lib
           if errorlevel 1 exit /b 1
           "$env:RUNNER_TEMP\%%t.exe"
           if errorlevel 1 exit /b 1

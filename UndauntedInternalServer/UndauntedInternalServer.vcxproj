@@ -161,6 +161,12 @@
     <ClInclude Include="ThraxTrackingState.h" />
     <ClInclude Include="ThraxTrackingProbePolicy.h" />
     <ClInclude Include="ThraxTrackingProbe.h" />
+    <ClInclude Include="ThraxTrackingRuntimeState.h" />
+    <ClInclude Include="ThraxTrackingRuntimePolicy.h" />
+    <ClInclude Include="ThraxTrackingRuntime.h" />
+    <ClInclude Include="ThraxTrackingKernel.h" />
+    <ClInclude Include="ThraxTrackingKernel\tracking_solver.hpp" />
+    <ClInclude Include="ThraxTrackingKernel\source_math.hpp" />
     <ClInclude Include="VibelessVersion.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Networking.h" />
@@ -180,6 +186,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="ThraxTrackingKernel.cpp">
+      <FloatingPointModel>Strict</FloatingPointModel>
+    </ClCompile>
     <ClCompile Include="MinHook\buffer.c" />
     <ClCompile Include="MinHook\hde\hde32.c" />
     <ClCompile Include="MinHook\hde\hde64.c" />

@@ -8,6 +8,8 @@
 // AGPL-3.0-only.
 #pragma once
 #include "QaProbePolicy.h"
+#include "QaProbeActionSelection.h"
+#include <cstring>
 #include "FeatureSupport.h"
 #include "HuntWorld.h"
 #include "VibelessVersion.h"
@@ -217,13 +219,45 @@ inline size_t ActionIndex = 0;
 inline ULONGLONG ActionStart = 0, ActionEnd = 0, NextAction = 0;
 inline std::set<AActor*> ActionActors;  // owned or instigated by the creature before/while the action plays
 inline int ActionNotifies = 0, ActionSpawned = 0;
+inline std::string ActionTablePath, ActionTableError;
+
+// Called only by the existing game-thread probe tick. Both references are hard
+// properties of the live subject/loaded class; do not search global inventories.
+inline UObject* ActionObjectProperty(UObject* object, const char* name) {
+    size_t depth = 0;
+    for (auto* type = object ? static_cast<UStruct*>(object->Class) : nullptr; type && depth++ < 32; type = type->SuperStruct) {
+        size_t count = 0;
+        for (auto* field = type->ChildProperties; field && count++ < 4096; field = field->Next) {
+            if (!field->ClassPrivate || field->Name.ToString() != name) continue;
+            const auto kind = field->ClassPrivate->Name.ToString();
+            if (kind != "ObjectProperty" && kind != "ClassProperty") return nullptr;
+            auto* property = static_cast<FProperty*>(field);
+            if (property->ArrayDim != 1 || property->ElementSize != sizeof(UObject*) || property->Offset < 0
+                || type->Size < property->ElementSize || property->Offset > type->Size - property->ElementSize) return nullptr;
+            UObject* result = nullptr;
+            std::memcpy(&result, reinterpret_cast<const unsigned char*>(object) + property->Offset, sizeof(result));
+            return result && UObject::GObjects->GetByIndex(result->Index) == result ? result : nullptr;
+        }
+    }
+    return nullptr;
+}
 
 inline std::vector<ActionRow> ActionTable() {
     std::vector<ActionRow> rows;
-    for (const auto& [object, index] : Loaded) {
-        if (UObject::GObjects->GetByIndex(index) != object || !object->IsA(UDataTable::StaticClass())) continue;
-        auto* table = static_cast<UDataTable*>(object);
-        if (!table->RowStruct || table->RowStruct->GetName() != "Struct_ActionSet" || table->RowMap.NumAllocated() < 0 || table->RowMap.NumAllocated() > 1024) continue;
+    ActionTablePath.clear();
+    auto* selected = QaProbeActionSelection::Select<UObject>(Actors.empty() ? nullptr : Actors[0].Actor,
+        ActionObjectProperty, [](UObject* object) -> UObject* {
+            if (!object->IsA(UClass::StaticClass())) return nullptr;
+            return static_cast<UClass*>(object)->ClassDefaultObject;
+        }, [](UObject* object) {
+            if (!object->IsA(UDataTable::StaticClass())) return false;
+            auto* table = static_cast<UDataTable*>(object);
+            return table->RowStruct && table->RowStruct->GetName() == "Struct_ActionSet"
+                && table->RowMap.NumAllocated() >= 0 && table->RowMap.NumAllocated() <= 1024;
+        }, ActionTableError);
+    if (selected) {
+        auto* table = static_cast<UDataTable*>(selected);
+        ActionTablePath = FeatureSupport::ObjectPath(table);
         for (int i = 0; i < table->RowMap.NumAllocated() && rows.size() < static_cast<size_t>(QaProbePolicy::MaxActions); ++i) {
             if (!table->RowMap.IsValidIndex(i)) continue;
             auto* row = reinterpret_cast<FStruct_ActionSet*>(table->RowMap[i].Value());
@@ -296,7 +330,7 @@ inline bool TickActions(UWorld* world) {
             else stage.Status = "ok";
             int notifies = 0, spawned = 0;
             for (const auto& a : Report.Actions) { notifies += a.Notifies; spawned += a.Spawned; }
-            if (stage.Status == "ok") stage.Detail = std::to_string(Report.Actions.size()) + " actions, " + std::to_string(notifies) + " notifies, " + std::to_string(spawned) + " actors spawned";
+            if (stage.Status == "ok") stage.Detail = "subject-selected table: " + ActionTablePath + "; " + std::to_string(Report.Actions.size()) + " actions, " + std::to_string(notifies) + " notifies, " + std::to_string(spawned) + " actors spawned";
             Report.CurrentAsset.clear();
             return true;
         }
@@ -562,14 +596,17 @@ inline void TickServer(UWorld* world, int port) {
         ActionRows = Report.Verdict == "running" ? ActionTable() : std::vector<ActionRow>{};
         if (!ActionRows.empty()) {
             PhaseStart = GetTickCount64();
-            Report.Begin("actions");
+            Report.Begin("actions").Detail = "subject-selected table: " + ActionTablePath;
             StopAi(Actors[0].Actor);
             NextAction = PhaseStart + 1000;  // the stopped behaviour's montage blends out
             Current = Phase::Actions;
             Write();
             return;
         }
-        if (Report.Verdict == "running") Report.Verdict = "pass";
+        const std::string skipped = Report.Verdict == "running"
+            ? (ActionTableError.empty() ? "subject-selected action table has no rows" : ActionTableError)
+            : "prior stage failed; actions were not attempted";
+        QaProbeActionSelection::SkipUntested(Report, skipped);
         Report.Begin("finish").Status = "ok";
         End();
         return;
